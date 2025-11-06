@@ -9,38 +9,18 @@
 > 🚀 **最新版本 cn-0.1.15**: 开发者体验与LLM生态系统大升级！新增千帆大模型支持、完整开发工具链、学术研究资料、企业级工作流规范！
 >
 > 🎯 **二开版核心功能**: 除原版功能外增加批量分析股票功能，大大节约时间和精力，增加会员管理功能。
-
+>
+> 🚀 **三开版核心功能**: 除原版功能和plus版的功能外，大大节约时间和精力，增强会员管理功能、密码修改、批量导出会员、批量导入新增会员、模型点数管理、批量分析激活机器码自动生成、会员独立线程分析、模型使用授权、公告管理。
 ## 🙏 致敬源项目
 
 感谢 [Tauric Research](https://github.com/TauricResearch) 团队创造的革命性多智能体交易框架 [TradingAgents](https://github.com/TauricResearch/TradingAgents)！
 感谢hsliuping/TradingAgents-CN（https://github.com/hsliuping/TradingAgents-CN）团队完善中文版本，增强版本性能
-## 🆕版本 v0.1.15 PLUS版二开增加内容
-### 🚀 admin后台增加会员管理功能，可增删查改会员，可修改会员使用点数，单股分析1次扣点数1点，批量分析按股票个数扣点
+感谢oficcejo/tradingagents-cn-plus（https://github.com/oficcejo/tradingagents-cn-plus）运营版本
+## 🆕版本 v0.1.15 yy版增加内容
+### 🚀 admin后台增加密码修改功能、增强会员管理功能，可授权模型的使用，会员独立线程分析、批量导入新增会员，批量导出会员信息，模型点数管理、批量分析激活机器码自动生成，单股分析1次选择不同模型扣点数可设置不同，公告管理
 ### 🤖 除原版功能外，增加批量分析股票板块，可批量依次分析多个股票，大大节约精力和时间
-### 📚 初次使用批量分析板块要求绑定机器码，高手可在程序中找到，怕麻烦的请star后把机器码发到邮箱ws3101001@126.com,第一时间回复
-### 🤖 安装方法参见原版，水平有限，如有疏漏请勿见怪！
-### 🎯 比较遗憾的是没有做到会员独立线程分析，希望下一个版本能完善。
-### 如需其他定制功能，请留言或发邮件
-<img width="1636" height="796" alt="1" src="https://github.com/user-attachments/assets/b88f32dc-6d2a-4314-b5f2-7f251ce57f38" />
-<img width="1768" height="785" alt="2" src="https://github.com/user-attachments/assets/ecf5ddbf-f275-4721-b18b-687fc3b12210" />
-<img width="1860" height="880" alt="3" src="https://github.com/user-attachments/assets/368ee4db-6ed4-49d2-bafd-0474f51a5a33" />
-<img width="1831" height="705" alt="4" src="https://github.com/user-attachments/assets/767fdbae-e924-4dc1-9414-38a2493106c0" />
-
-## 需要多股批量分析版请进另一项目https://github.com/oficcejo/tradingagents
-## 🆕版本 v0.1.15 二开增加内容
-### 🤖 除原版功能外，增加批量分析股票板块，可批量依次分析多个股票，大大节约精力和时间
-### 📚 初次使用批量分析板块要求绑定机器码，高手可在程序中找到，怕麻烦的请star后把机器码发到邮箱ws3101001@126.com,第一时间回复
-### 🤖 安装方法参见原版，水平有限，如有疏漏请勿见怪！
-<img width="1910" height="923" alt="1" src="https://github.com/user-attachments/assets/4b3b5247-482c-43de-a2cb-069d26cb2e78" />
-<img width="1910" height="923" alt="2" src="https://github.com/user-attachments/assets/4e344f7e-bc8a-42d2-9aaa-96bdbe1858a9" />
-<img width="1910" height="923" alt="3" src="https://github.com/user-attachments/assets/8a114d47-4502-49db-8570-bc253b107c37" />
-<img width="1910" height="923" alt="5" src="https://github.com/user-attachments/assets/6079cab2-f340-43c8-b511-f7b1a2827da6" />
-<img width="1910" height="923" alt="6" src="https://github.com/user-attachments/assets/93ad65fe-ad6e-4e82-84e7-da794b6cfc80" />
-<img width="1910" height="923" alt="7" src="https://github.com/user-attachments/assets/2fbe289f-da43-4c3a-9afd-c15517f88887" />
-<img width="1910" height="923" alt="8" src="https://github.com/user-attachments/assets/85874c6c-705c-4423-b33e-49533755e91b" />
-<img width="1910" height="923" alt="9" src="https://github.com/user-attachments/assets/d03a5094-908b-4691-8879-f96df5467540" />
-<img width="1479" height="760" alt="4" src="https://github.com/user-attachments/assets/6abeb084-3867-4760-9571-2426d79ff825" />
-
+### 📚 初次使用批量分析机器码，直接生成
+### 🤖 安装方法参见原版，测试系统VPS-ubuntu22版-docker构建
 
 ### 以下为原版内容
 
