@@ -98,7 +98,35 @@ def render_batch_analysis_form():
                     5: get_research_depth_points(5)
                 }
                 depth_points = depth_points_map.get(cached_depth, 1)
-                help_text = f"选择分析的深度级别，级别越高分析越详细但耗时更长\n当前选择：{cached_depth}级，每个股票消耗 {depth_points} 点"
+                
+                # 获取当前选择的模型点数和开关状态
+                try:
+                    from utils.model_points import get_model_points, get_analysis_points, get_points_toggle_config
+                    llm_provider = st.session_state.get('llm_provider', 'dashscope')
+                    llm_model = st.session_state.get('llm_model', 'qwen-turbo')
+                    
+                    # 获取开关状态
+                    toggle_config = get_points_toggle_config()
+                    enable_research_depth_points = toggle_config.get("enable_research_depth_points", True)
+                    enable_model_points = toggle_config.get("enable_model_points", True)
+                    
+                    total_points = get_analysis_points(cached_depth, llm_provider, llm_model)
+                    
+                    # 构建帮助文本
+                    parts = []
+                    if enable_research_depth_points:
+                        parts.append(f"{cached_depth}级 ({depth_points}点基础)")
+                    if enable_model_points:
+                        model_points = get_model_points(llm_provider, llm_model)
+                        parts.append(f"模型 ({model_points}点)")
+                    
+                    if parts:
+                        points_detail = " + ".join(parts)
+                        help_text = f"选择分析的深度级别，级别越高分析越详细但耗时更长\n当前选择：{points_detail} = {total_points}点/股票"
+                    else:
+                        help_text = f"选择分析的深度级别，级别越高分析越详细但耗时更长\n当前选择：{cached_depth}级（点数消耗功能已关闭）"
+                except Exception:
+                    help_text = f"选择分析的深度级别，级别越高分析越详细但耗时更长\n当前选择：{cached_depth}级，基础消耗 {depth_points} 点/股票"
                 
                 # 定义格式函数
                 def format_depth(x):
@@ -110,7 +138,7 @@ def render_batch_analysis_form():
                         4: "4级 - 深度分析",
                         5: "5级 - 全面分析"
                     }
-                    return f"{depth_names.get(x, f'{x}级')} ({points}点/股票)"
+                    return f"{depth_names.get(x, f'{x}级')} ({points}点基础)"
             except Exception:
                 help_text = "选择分析的深度级别，级别越高分析越详细但耗时更长"
                 depth_points_map = {}
@@ -132,11 +160,39 @@ def render_batch_analysis_form():
                 help=help_text
             )
             
-            # 显示当前选择的点数消耗（在解析股票代码后显示总消耗）
-            if depth_points_map:
+            # 显示当前选择的总点数消耗（根据开关状态）
+            try:
+                from utils.model_points import get_analysis_points, get_research_depth_points, get_model_points, get_points_toggle_config
+                llm_provider = st.session_state.get('llm_provider', 'dashscope')
+                llm_model = st.session_state.get('llm_model', 'qwen-turbo')
+                points_per_stock = get_analysis_points(research_depth, llm_provider, llm_model)
+                
+                # 获取开关状态
+                toggle_config = get_points_toggle_config()
+                enable_research_depth_points = toggle_config.get("enable_research_depth_points", True)
+                enable_model_points = toggle_config.get("enable_model_points", True)
+                
+                # 构建显示信息
+                parts = []
+                if enable_research_depth_points:
+                    depth_points = get_research_depth_points(research_depth)
+                    parts.append(f"研究深度 {research_depth} 级: {depth_points}点")
+                if enable_model_points:
+                    model_points = get_model_points(llm_provider, llm_model)
+                    parts.append(f"模型: {model_points}点")
+                
+                if parts:
+                    points_info = " + ".join(parts)
+                    if points_per_stock > 0:
+                        st.caption(f"💡 每个股票预计消耗: {points_per_stock} 点（{points_info}）")
+                    else:
+                        st.caption(f"💡 当前配置下不消耗点数（所有点数消耗功能已关闭）")
+                else:
+                    st.caption(f"💡 当前配置下不消耗点数")
+            except Exception:
                 try:
                     current_points = depth_points_map.get(research_depth, 1)
-                    st.caption(f"💡 每个股票将消耗 {current_points} 点（具体总消耗取决于股票数量）")
+                    st.caption(f"💡 研究深度基础消耗: {current_points} 点/股票")
                 except Exception:
                     pass
             
@@ -271,14 +327,45 @@ def render_batch_analysis_form():
             estimated_time = len(stock_symbols) * (research_depth * 30 + 60) + (len(stock_symbols) - 1) * analysis_interval
             st.info(f"⏱️ 预估分析时间: {estimated_time // 60}分{estimated_time % 60}秒")
             
-            # 显示预估点数消耗
+            # 显示预估点数消耗（根据开关状态）
             try:
-                from utils.model_points import get_research_depth_points
-                points_per_stock = get_research_depth_points(research_depth)
+                from utils.model_points import get_analysis_points, get_research_depth_points, get_model_points, get_points_toggle_config
+                llm_provider = st.session_state.get('llm_provider', 'dashscope')
+                llm_model = st.session_state.get('llm_model', 'qwen-turbo')
+                points_per_stock = get_analysis_points(research_depth, llm_provider, llm_model)
+                
+                # 获取开关状态
+                toggle_config = get_points_toggle_config()
+                enable_research_depth_points = toggle_config.get("enable_research_depth_points", True)
+                enable_model_points = toggle_config.get("enable_model_points", True)
+                
                 total_points = len(stock_symbols) * points_per_stock
-                st.info(f"💰 预估点数消耗: {total_points} 点（{len(stock_symbols)} 个股票 × {points_per_stock} 点/股票，研究深度 {research_depth} 级）")
+                
+                # 构建显示信息
+                parts = []
+                if enable_research_depth_points:
+                    depth_points = get_research_depth_points(research_depth)
+                    parts.append(f"研究深度 {research_depth} 级: {depth_points}点")
+                if enable_model_points:
+                    model_points = get_model_points(llm_provider, llm_model)
+                    parts.append(f"模型: {model_points}点")
+                
+                if parts:
+                    points_info = " + ".join(parts)
+                    if total_points > 0:
+                        st.info(f"💰 预估点数消耗: {total_points} 点（{len(stock_symbols)} 个股票 × {points_per_stock} 点/股票，{points_info}）")
+                    else:
+                        st.info(f"💰 当前配置下不消耗点数（所有点数消耗功能已关闭）")
+                else:
+                    st.info(f"💰 当前配置下不消耗点数")
             except Exception:
-                pass
+                try:
+                    from utils.model_points import get_research_depth_points
+                    points_per_stock = get_research_depth_points(research_depth)
+                    total_points = len(stock_symbols) * points_per_stock
+                    st.info(f"💰 预估点数消耗: {total_points} 点（{len(stock_symbols)} 个股票 × {points_per_stock} 点/股票，研究深度 {research_depth} 级）")
+                except Exception:
+                    pass
         else:
             st.info("💡 请在上方输入股票代码，支持逗号或换行分隔")
 

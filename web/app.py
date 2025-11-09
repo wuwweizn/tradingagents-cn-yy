@@ -1217,19 +1217,41 @@ def main():
                 # 扣点校验（在主线程中执行）
                 try:
                     from utils.auth_manager import auth_manager as _auth
-                    from utils.model_points import get_research_depth_points as _get_research_depth_points
+                    from utils.model_points import get_analysis_points as _get_analysis_points
                     current_user = _auth.get_current_user()
                     username = current_user and current_user.get("username")
                     if username:
-                        # 根据研究深度获取消耗点数
+                        # 根据研究深度和模型获取消耗点数
                         research_depth = form_data.get('research_depth', 3)
-                        points_cost = _get_research_depth_points(research_depth)
+                        llm_provider = st.session_state.get('llm_provider', 'dashscope')
+                        llm_model = st.session_state.get('llm_model', 'qwen-turbo')
+                        points_cost = _get_analysis_points(research_depth, llm_provider, llm_model)
                         
-                        if not _auth.try_deduct_points(username, points_cost):
-                            st.error(f"点数不足，需要 {points_cost} 点（研究深度 {research_depth} 级），无法开始分析")
-                            return
+                        # 获取明细用于显示（根据开关状态）
+                        from utils.model_points import get_research_depth_points, get_model_points, get_points_toggle_config
+                        toggle_config = get_points_toggle_config()
+                        enable_research_depth_points = toggle_config.get("enable_research_depth_points", True)
+                        enable_model_points = toggle_config.get("enable_model_points", True)
+                        
+                        parts = []
+                        if enable_research_depth_points:
+                            depth_points = get_research_depth_points(research_depth)
+                            parts.append(f"研究深度 {research_depth} 级: {depth_points}点")
+                        if enable_model_points:
+                            model_points = get_model_points(llm_provider, llm_model)
+                            parts.append(f"模型: {model_points}点")
+                        
+                        points_detail = " + ".join(parts) if parts else "不消耗点数（所有点数消耗功能已关闭）"
+                        
+                        if points_cost > 0:
+                            if not _auth.try_deduct_points(username, points_cost):
+                                st.error(f"点数不足，需要 {points_cost} 点（{points_detail}），无法开始分析")
+                                return
+                            else:
+                                st.success(f"已扣除 {points_cost} 点（{points_detail}），剩余点数: {_auth.get_user_points(username)}")
                         else:
-                            st.success(f"已扣除 {points_cost} 点（研究深度 {research_depth} 级），剩余点数: {_auth.get_user_points(username)}")
+                            # 如果配置为不消耗点数，直接通过
+                            st.info(f"当前配置下不消耗点数，可直接开始分析")
                 except Exception as _e:
                     logger.warning(f"点数扣减失败(将继续执行): {_e}")
                 
@@ -1839,20 +1861,42 @@ def render_batch_analysis_page():
             # 扣点校验（在主线程中执行）
             try:
                 from utils.auth_manager import auth_manager as _auth
-                from utils.model_points import get_research_depth_points as _get_research_depth_points
+                from utils.model_points import get_analysis_points as _get_analysis_points
                 current_user = _auth.get_current_user()
                 username = current_user and current_user.get("username")
                 if username:
-                    # 根据研究深度获取每个股票消耗的点数
+                    # 根据研究深度和模型获取每个股票消耗的点数
                     research_depth = form_data.get('research_depth', 3)
-                    points_per_stock = _get_research_depth_points(research_depth)
+                    llm_provider = st.session_state.get('llm_provider', 'dashscope')
+                    llm_model = st.session_state.get('llm_model', 'qwen-turbo')
+                    points_per_stock = _get_analysis_points(research_depth, llm_provider, llm_model)
                     need_points = len(form_data['stock_symbols']) * points_per_stock
                     
-                    if not _auth.try_deduct_points(username, need_points):
-                        st.error(f"点数不足，需要 {need_points} 点（{len(form_data['stock_symbols'])} 个股票 × {points_per_stock} 点/股票，研究深度 {research_depth} 级），无法开始批量分析")
-                        return
+                    # 获取明细用于显示（根据开关状态）
+                    from utils.model_points import get_research_depth_points, get_model_points, get_points_toggle_config
+                    toggle_config = get_points_toggle_config()
+                    enable_research_depth_points = toggle_config.get("enable_research_depth_points", True)
+                    enable_model_points = toggle_config.get("enable_model_points", True)
+                    
+                    parts = []
+                    if enable_research_depth_points:
+                        depth_points = get_research_depth_points(research_depth)
+                        parts.append(f"研究深度 {research_depth} 级: {depth_points}点")
+                    if enable_model_points:
+                        model_points = get_model_points(llm_provider, llm_model)
+                        parts.append(f"模型: {model_points}点")
+                    
+                    points_detail = " + ".join(parts) if parts else "不消耗点数（所有点数消耗功能已关闭）"
+                    
+                    if need_points > 0:
+                        if not _auth.try_deduct_points(username, need_points):
+                            st.error(f"点数不足，需要 {need_points} 点（{len(form_data['stock_symbols'])} 个股票 × {points_per_stock} 点/股票，{points_detail}），无法开始批量分析")
+                            return
+                        else:
+                            st.success(f"已扣除 {need_points} 点（{len(form_data['stock_symbols'])} 个股票 × {points_per_stock} 点/股票，{points_detail}），剩余点数: {_auth.get_user_points(username)}")
                     else:
-                        st.success(f"已扣除 {need_points} 点（{len(form_data['stock_symbols'])} 个股票 × {points_per_stock} 点/股票，研究深度 {research_depth} 级），剩余点数: {_auth.get_user_points(username)}")
+                        # 如果配置为不消耗点数，直接通过
+                        st.info(f"当前配置下不消耗点数，可直接开始批量分析")
             except Exception as _e:
                 logger.warning(f"批量分析点数扣减失败(将继续执行): {_e}")
             

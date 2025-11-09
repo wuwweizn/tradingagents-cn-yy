@@ -511,6 +511,63 @@ def render_research_depth_points_config():
     
     st.markdown("---")
     
+    # 点数消耗开关设置
+    st.markdown("**点数消耗开关设置**")
+    st.markdown("可以控制是否启用研究深度点数和模型点数的消耗")
+    
+    try:
+        from utils.model_points import get_points_toggle_config, set_points_toggle_config, reload_config
+        
+        # 获取当前开关状态
+        toggle_config = get_points_toggle_config()
+        enable_research_depth_points = toggle_config.get("enable_research_depth_points", True)
+        enable_model_points = toggle_config.get("enable_model_points", True)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            new_enable_research_depth = st.checkbox(
+                "启用研究深度点数消耗",
+                value=enable_research_depth_points,
+                help="如果关闭，研究深度级别将不消耗点数",
+                key="toggle_research_depth_points"
+            )
+        
+        with col2:
+            new_enable_model = st.checkbox(
+                "启用模型点数消耗",
+                value=enable_model_points,
+                help="如果关闭，模型选择将不消耗点数",
+                key="toggle_model_points"
+            )
+        
+        if st.button("保存开关设置", type="primary", key="save_points_toggle"):
+            if set_points_toggle_config(
+                enable_research_depth_points=new_enable_research_depth,
+                enable_model_points=new_enable_model
+            ):
+                reload_config()
+                st.success("✅ 开关设置已保存！")
+                st.rerun()
+            else:
+                st.error("❌ 保存失败")
+        
+        # 显示当前状态说明
+        st.info(f"""
+        **当前状态：**
+        - 研究深度点数消耗：{'✅ 已启用' if enable_research_depth_points else '❌ 已禁用'}
+        - 模型点数消耗：{'✅ 已启用' if enable_model_points else '❌ 已禁用'}
+        
+        **说明：**
+        - 如果两个开关都关闭，分析将不消耗任何点数
+        - 如果只启用其中一个，则只计算该部分的点数
+        - 如果两个都启用，总点数 = 研究深度基础点数 + 模型点数
+        """)
+    except Exception as e:
+        st.error(f"无法加载开关设置: {e}")
+    
+    st.markdown("---")
+    
     # 显示默认配置说明
     st.info("**说明**：研究深度级别从1级到5级，级别越高分析越详细，消耗的点数也越多。当前默认配置：")
     default_info = []

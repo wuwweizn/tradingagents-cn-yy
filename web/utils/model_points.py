@@ -40,8 +40,22 @@ DEFAULT_MODEL_POINTS_CONFIG = {
     ("openai", "gpt-4"): 4,
     ("openai", "gpt-3.5-turbo"): 1,
     
-    # OpenRouter (使用默认值，可在需要时扩展)
-    ("openrouter", "default"): 2,
+    # OpenRouter
+    ("openrouter", "default"): 2,  # 默认点数（当模型未配置时使用）
+    # 常见OpenRouter模型配置
+    ("openrouter", "anthropic/claude-3.7-sonnet"): 5,  # Claude 3.7 Sonnet - 高质量模型
+    ("openrouter", "anthropic/claude-opus-4"): 8,  # Claude 4 Opus - 顶级模型
+    ("openrouter", "anthropic/claude-3.5-sonnet"): 4,  # Claude 3.5 Sonnet
+    ("openrouter", "anthropic/claude-3-opus"): 6,  # Claude 3 Opus
+    ("openrouter", "openai/gpt-4o"): 5,  # GPT-4o
+    ("openrouter", "openai/gpt-4-turbo"): 4,  # GPT-4 Turbo
+    ("openrouter", "openai/gpt-4"): 4,  # GPT-4
+    ("openrouter", "openai/gpt-3.5-turbo"): 1,  # GPT-3.5 Turbo - 较便宜
+    ("openrouter", "google/gemini-2.0-flash-exp"): 2,  # Gemini 2.0 Flash
+    ("openrouter", "google/gemini-pro"): 3,  # Gemini Pro
+    ("openrouter", "meta-llama/llama-4-scout"): 3,  # Llama 4 Scout
+    ("openrouter", "meta-llama/llama-3.1-405b"): 4,  # Llama 3.1 405B
+    ("openrouter", "meta-llama/llama-3.1-70b"): 2,  # Llama 3.1 70B
     
     # 硅基流动 (SiliconFlow)
     ("siliconflow", "Qwen/Qwen3-30B-A3B-Thinking-2507"): 3,
@@ -71,6 +85,12 @@ DEFAULT_RESEARCH_DEPTH_POINTS_CONFIG = {
     3: 3,  # 3级 - 标准分析：中等成本
     4: 5,  # 4级 - 深度分析：较高成本
     5: 8,  # 5级 - 全面分析：最高成本
+}
+
+# 点数消耗开关默认配置
+DEFAULT_POINTS_TOGGLE_CONFIG = {
+    "enable_research_depth_points": True,  # 启用研究深度点数消耗
+    "enable_model_points": True,  # 启用模型点数消耗
 }
 
 
@@ -151,8 +171,10 @@ def reload_config():
     """重新加载配置（用于管理员修改配置后）"""
     global _CONFIG_CACHE
     global _RESEARCH_DEPTH_CONFIG_CACHE
+    global _POINTS_TOGGLE_CONFIG_CACHE
     _CONFIG_CACHE = _load_config()
     _RESEARCH_DEPTH_CONFIG_CACHE = _load_research_depth_config()
+    _POINTS_TOGGLE_CONFIG_CACHE = _load_points_toggle_config()
 
 
 def get_model_points(llm_provider: str, llm_model: str) -> int:
@@ -178,13 +200,32 @@ def get_model_points(llm_provider: str, llm_model: str) -> int:
     if key in config:
         return config[key]
     
+    # 对于OpenRouter、custom_openai、qianfan等支持default配置的提供商
+    # 如果找不到精确匹配，先检查是否有default配置
+    if provider in ["openrouter", "custom_openai", "qianfan"]:
+        default_key = (provider, "default")
+        if default_key in config:
+            return config[default_key]
+    
     # 如果找不到精确匹配，尝试模糊匹配（用于处理一些特殊格式）
     # 例如：某些模型名称可能包含额外信息
+    # 注意：对于OpenRouter等，如果找不到精确匹配，已经使用了default配置，这里主要是处理其他提供商
     for (config_provider, config_model), points in config.items():
         if config_provider == provider:
-            # 检查模型名称是否包含配置的模型名称，或配置的模型名称是否包含实际模型名称
-            if model == config_model or model.startswith(config_model) or config_model.startswith(model):
+            # 跳过default配置（已经处理过了）
+            if config_model == "default":
+                continue
+            
+            # 精确匹配（在循环中再次检查，虽然理论上不会到这里，但为了安全）
+            if model == config_model:
                 return points
+            
+            # 通用模糊匹配：检查模型名称是否包含配置的模型名称，或配置的模型名称是否包含实际模型名称
+            # 例如：某些模型名称可能包含额外信息（版本号、后缀等）
+            # 但只对非OpenRouter提供商使用，OpenRouter已经通过default配置处理
+            if provider not in ["openrouter", "custom_openai", "qianfan"]:
+                if model.startswith(config_model) or config_model.startswith(model):
+                    return points
     
     # 如果仍然找不到，返回默认点数
     return DEFAULT_POINTS
@@ -343,6 +384,134 @@ def get_all_research_depth_points() -> Dict[int, int]:
     return _get_research_depth_config().copy()
 
 
+def _load_points_toggle_config() -> Dict[str, bool]:
+    """
+    从配置文件加载点数消耗开关配置
+    
+    Returns:
+        格式: {"enable_research_depth_points": bool, "enable_model_points": bool}
+    """
+    try:
+        if CONFIG_FILE.exists():
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                toggle_config = data.get('points_toggle', {})
+                if toggle_config:
+                    config = {
+                        "enable_research_depth_points": toggle_config.get("enable_research_depth_points", True),
+                        "enable_model_points": toggle_config.get("enable_model_points", True),
+                    }
+                    return config
+    except Exception:
+        pass
+    
+    # 如果加载失败，返回默认配置
+    return DEFAULT_POINTS_TOGGLE_CONFIG.copy()
+
+
+# 全局点数开关配置缓存
+_POINTS_TOGGLE_CONFIG_CACHE: Dict[str, bool] = None
+
+
+def _get_points_toggle_config() -> Dict[str, bool]:
+    """获取点数开关配置（带缓存）"""
+    global _POINTS_TOGGLE_CONFIG_CACHE
+    if _POINTS_TOGGLE_CONFIG_CACHE is None:
+        _POINTS_TOGGLE_CONFIG_CACHE = _load_points_toggle_config()
+    return _POINTS_TOGGLE_CONFIG_CACHE
+
+
+def get_points_toggle_config() -> Dict[str, bool]:
+    """
+    获取点数消耗开关配置
+    
+    Returns:
+        格式: {"enable_research_depth_points": bool, "enable_model_points": bool}
+    """
+    return _get_points_toggle_config().copy()
+
+
+def set_points_toggle_config(enable_research_depth_points: bool = None, enable_model_points: bool = None) -> bool:
+    """
+    设置点数消耗开关配置
+    
+    Args:
+        enable_research_depth_points: 是否启用研究深度点数消耗（None表示不修改）
+        enable_model_points: 是否启用模型点数消耗（None表示不修改）
+    
+    Returns:
+        是否保存成功
+    """
+    try:
+        # 加载现有配置
+        if CONFIG_FILE.exists():
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        else:
+            data = {
+                'version': '1.0',
+                'default_points': DEFAULT_POINTS,
+                'config': [],
+                'research_depth_points': {},
+                'points_toggle': {}
+            }
+        
+        # 更新开关配置
+        if 'points_toggle' not in data:
+            data['points_toggle'] = DEFAULT_POINTS_TOGGLE_CONFIG.copy()
+        
+        current_config = _get_points_toggle_config()
+        if enable_research_depth_points is not None:
+            data['points_toggle']['enable_research_depth_points'] = bool(enable_research_depth_points)
+        if enable_model_points is not None:
+            data['points_toggle']['enable_model_points'] = bool(enable_model_points)
+        
+        # 保存配置
+        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        
+        # 重新加载配置缓存
+        global _POINTS_TOGGLE_CONFIG_CACHE
+        _POINTS_TOGGLE_CONFIG_CACHE = _load_points_toggle_config()
+        
+        return True
+    except Exception:
+        return False
+
+
+def get_analysis_points(research_depth: int, llm_provider: str = None, llm_model: str = None) -> int:
+    """
+    获取分析消耗的总点数（根据开关状态决定是否包含研究深度点数和模型点数）
+    
+    Args:
+        research_depth: 研究深度级别 (1-5)
+        llm_provider: LLM提供商（可选，如果提供则会根据开关状态加上模型点数）
+        llm_model: 模型名称（可选，如果提供则会根据开关状态加上模型点数）
+    
+    Returns:
+        消耗的总点数
+    """
+    # 获取开关配置
+    toggle_config = _get_points_toggle_config()
+    enable_research_depth_points = toggle_config.get("enable_research_depth_points", True)
+    enable_model_points = toggle_config.get("enable_model_points", True)
+    
+    total_points = 0
+    
+    # 根据开关状态添加研究深度基础点数
+    if enable_research_depth_points:
+        depth_points = get_research_depth_points(research_depth)
+        total_points += depth_points
+    
+    # 根据开关状态添加模型点数
+    if enable_model_points and llm_provider and llm_model:
+        model_points = get_model_points(llm_provider, llm_model)
+        total_points += model_points
+    
+    return total_points
+
+
 def set_research_depth_points(research_depth: int, points: int) -> bool:
     """
     设置指定研究深度的点数
@@ -420,6 +589,14 @@ class ModelPointsManager:
     def set_research_depth_points(self, research_depth: int, points: int) -> bool:
         """设置指定研究深度的点数"""
         return set_research_depth_points(research_depth, points)
+    
+    def get_points_toggle_config(self) -> Dict[str, bool]:
+        """获取点数消耗开关配置"""
+        return get_points_toggle_config()
+    
+    def set_points_toggle_config(self, enable_research_depth_points: bool = None, enable_model_points: bool = None) -> bool:
+        """设置点数消耗开关配置"""
+        return set_points_toggle_config(enable_research_depth_points, enable_model_points)
 
 
 # 创建全局实例（兼容旧代码）
