@@ -25,144 +25,6 @@ from tradingagents.config.config_manager import (
 )
 
 
-def get_provider_models_mapping():
-    """
-    获取所有提供商和对应的模型列表
-    基于侧边栏中的配置，与sidebar.py保持一致
-    """
-    return {
-        "dashscope": {
-            "label": "阿里百炼",
-            "models": ["qwen-turbo", "qwen-plus-latest", "qwen-max"]
-        },
-        "deepseek": {
-            "label": "DeepSeek V3",
-            "models": ["deepseek-chat"]
-        },
-        "google": {
-            "label": "Google AI",
-            "models": [
-                "gemini-2.5-pro",
-                "gemini-2.5-flash",
-                "gemini-2.5-flash-lite",
-                "gemini-2.5-pro-002",
-                "gemini-2.5-flash-002",
-                "gemini-2.0-flash",
-                "gemini-2.5-flash-lite-preview-06-17",
-                "gemini-1.5-pro",
-                "gemini-1.5-flash"
-            ]
-        },
-        "openai": {
-            "label": "OpenAI",
-            "models": [
-                "gpt-4o",
-                "gpt-4o-mini",
-                "gpt-4-turbo",
-                "gpt-4",
-                "gpt-3.5-turbo"
-            ]
-        },
-        "openrouter": {
-            "label": "OpenRouter",
-            "models": [
-                # OpenAI models
-                "openai/o4-mini-high",
-                "openai/o3-pro",
-                "openai/o3-mini-high",
-                "openai/o3-mini",
-                "openai/o1-pro",
-                "openai/o1-mini",
-                "openai/gpt-4o-2024-11-20",
-                "openai/gpt-4o-mini",
-                "openai/gpt-4-turbo",
-                "openai/gpt-3.5-turbo",
-                # Anthropic models
-                "anthropic/claude-opus-4",
-                "anthropic/claude-sonnet-4",
-                "anthropic/claude-haiku-4",
-                "anthropic/claude-3.7-sonnet",
-                "anthropic/claude-3.5-sonnet",
-                "anthropic/claude-3.5-haiku",
-                "anthropic/claude-3.5-sonnet-20241022",
-                "anthropic/claude-3.5-haiku-20241022",
-                "anthropic/claude-3-opus",
-                "anthropic/claude-3-sonnet",
-                "anthropic/claude-3-haiku",
-                # Meta models
-                "meta-llama/llama-4-maverick",
-                "meta-llama/llama-4-scout",
-                "meta-llama/llama-3.3-70b-instruct",
-                "meta-llama/llama-3.2-90b-vision-instruct",
-                "meta-llama/llama-3.1-405b-instruct",
-                "meta-llama/llama-3.1-70b-instruct",
-                "meta-llama/llama-3.2-11b-vision-instruct",
-                "meta-llama/llama-3.1-8b-instruct",
-                "meta-llama/llama-3.2-3b-instruct",
-                "meta-llama/llama-3.2-1b-instruct",
-                # Google models
-                "google/gemini-2.5-pro",
-                "google/gemini-2.5-flash",
-                "google/gemini-2.5-flash-lite",
-                "google/gemini-2.5-pro-002",
-                "google/gemini-2.5-flash-002",
-                "google/gemini-2.0-flash-001",
-                "google/gemini-2.0-flash-lite-001",
-                "google/gemini-1.5-pro",
-                "google/gemini-1.5-flash",
-                "google/gemma-3-27b-it",
-                "google/gemma-3-12b-it",
-                "google/gemma-2-27b-it",
-                # Default for custom models
-                "default"
-            ]
-        },
-        "siliconflow": {
-            "label": "硅基流动",
-            "models": [
-                "Qwen/Qwen3-30B-A3B-Thinking-2507",
-                "Qwen/Qwen3-30B-A3B-Instruct-2507",
-                "Qwen/Qwen3-235B-A22B-Thinking-2507",
-                "Qwen/Qwen3-235B-A22B-Instruct-2507",
-                "deepseek-ai/DeepSeek-R1",
-                "zai-org/GLM-4.5",
-                "moonshotai/Kimi-K2-Instruct"
-            ]
-        },
-        "custom_openai": {
-            "label": "自定义OpenAI端点",
-            "models": [
-                "gpt-4o",
-                "gpt-4o-mini",
-                "gpt-4-turbo",
-                "gpt-4",
-                "gpt-3.5-turbo",
-                "claude-3.5-sonnet",
-                "claude-3-opus",
-                "claude-3-sonnet",
-                "claude-3-haiku",
-                "gemini-pro",
-                "gemini-1.5-pro",
-                "llama-3.1-8b",
-                "llama-3.1-70b",
-                "llama-3.1-405b",
-                "custom-model",
-                "default"
-            ]
-        },
-        "qianfan": {
-            "label": "文心一言（千帆）",
-            "models": [
-                "ernie-3.5-8k",
-                "ernie-4.0-turbo-8k",
-                "ERNIE-Speed-8K",
-                "ERNIE-Lite-8K",
-                "default"
-            ]
-        }
-    }
-
-
 def render_config_management():
     """渲染配置管理页面"""
     # 应用隐藏Deploy按钮的CSS样式
@@ -515,120 +377,13 @@ def render_model_points_config():
     # 添加新配置
     st.markdown("**添加新模型点数配置**")
     
-    # 获取提供商和模型映射
-    provider_mapping = get_provider_models_mapping()
-    
-    # 初始化session state
-    if 'new_provider_selected' not in st.session_state:
-        st.session_state.new_provider_selected = None
-    if 'new_model_selected' not in st.session_state:
-        st.session_state.new_model_selected = None
-    if 'last_provider_selected' not in st.session_state:
-        st.session_state.last_provider_selected = None
-    
     col1, col2, col3 = st.columns([2, 2, 1])
     
     with col1:
-        # 提供商下拉选择
-        provider_options = []
-        provider_values = []
-        for provider_key, provider_info in provider_mapping.items():
-            provider_options.append(f"{provider_info['label']} ({provider_key})")
-            provider_values.append(provider_key)
-        
-        # 添加"自定义"选项
-        provider_options.append("自定义")
-        provider_values.append("custom")
-        
-        # 获取当前选择的索引
-        current_provider_index = 0
-        if st.session_state.new_provider_selected:
-            try:
-                current_provider_index = provider_values.index(st.session_state.new_provider_selected)
-            except ValueError:
-                current_provider_index = 0
-        elif st.session_state.get('new_provider'):
-            # 兼容旧的手动输入值
-            try:
-                current_provider_index = provider_values.index(st.session_state.new_provider.lower().strip())
-            except ValueError:
-                current_provider_index = 0
-        
-        selected_provider_label = st.selectbox(
-            "提供商",
-            options=provider_options,
-            index=current_provider_index,
-            key="new_provider_selectbox"
-        )
-        
-        # 获取选择的提供商值
-        selected_provider_index = provider_options.index(selected_provider_label)
-        selected_provider_value = provider_values[selected_provider_index]
-        st.session_state.new_provider_selected = selected_provider_value
-        
-        # 如果选择了自定义，显示文本输入框
-        if selected_provider_value == "custom":
-            new_provider = st.text_input(
-                "自定义提供商",
-                value=st.session_state.get('new_provider', ''),
-                placeholder="例如: dashscope, google, openai",
-                key="new_provider_custom"
-            )
-        else:
-            new_provider = selected_provider_value
+        new_provider = st.text_input("提供商", placeholder="例如: dashscope, google, openai", key="new_provider")
     
     with col2:
-        # 根据选择的提供商显示模型列表
-        if new_provider and new_provider != "custom" and new_provider in provider_mapping:
-            provider_info = provider_mapping[new_provider]
-            model_options = provider_info['models']
-            
-            # 如果提供商改变了，清空之前选择的模型
-            if st.session_state.get('last_provider_selected') != new_provider:
-                st.session_state.new_model_selected = None
-                st.session_state.last_provider_selected = new_provider
-            
-            # 获取当前选择的模型索引
-            current_model_index = 0
-            if st.session_state.new_model_selected and st.session_state.new_model_selected in model_options:
-                try:
-                    current_model_index = model_options.index(st.session_state.new_model_selected)
-                except ValueError:
-                    current_model_index = 0
-            
-            # 添加"自定义模型"选项
-            model_options_with_custom = model_options + ["自定义模型"]
-            
-            # 使用提供商作为key的一部分，确保不同提供商有不同的selectbox
-            selected_model_label = st.selectbox(
-                "模型名称",
-                options=model_options_with_custom,
-                index=min(current_model_index, len(model_options_with_custom) - 1),
-                key=f"new_model_selectbox_{new_provider}"
-            )
-            
-            if selected_model_label == "自定义模型":
-                new_model = st.text_input(
-                    "自定义模型名称",
-                    value=st.session_state.get('new_model', ''),
-                    placeholder="例如: custom-model-name",
-                    key=f"new_model_custom_{new_provider}"
-                )
-            else:
-                new_model = selected_model_label
-                st.session_state.new_model_selected = new_model
-        elif new_provider == "custom":
-            # 自定义提供商，直接输入模型名称
-            new_model = st.text_input(
-                "模型名称",
-                value=st.session_state.get('new_model', ''),
-                placeholder="例如: qwen-turbo, gemini-2.5-pro",
-                key="new_model_custom_input"
-            )
-        else:
-            # 未选择提供商，提示先选择提供商
-            st.info("请先选择提供商")
-            new_model = ""
+        new_model = st.text_input("模型名称", placeholder="例如: qwen-turbo, gemini-2.5-pro", key="new_model")
     
     with col3:
         new_points_value = st.number_input("消耗点数", min_value=1, value=1, step=1, key="new_points")
@@ -644,10 +399,6 @@ def render_model_points_config():
             else:
                 if set_model_points(provider_lower, model_strip, new_points_value):
                     st.success("配置已添加！")
-                    # 清空session state
-                    st.session_state.new_provider_selected = None
-                    st.session_state.new_model_selected = None
-                    st.session_state.last_provider_selected = None
                     st.rerun()
                 else:
                     st.error("添加失败")
