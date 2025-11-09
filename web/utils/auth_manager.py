@@ -1,7 +1,7 @@
 """
 用户认证管理器
 处理用户登录、权限验证等功能
-支持前端缓存登录状态，10分钟无操作自动失效
+支持前端缓存登录状态，5分钟无操作自动失效
 """
 
 import streamlit as st
@@ -28,7 +28,7 @@ class AuthManager:
     
     def __init__(self):
         self.users_file = Path(__file__).parent.parent / "config" / "users.json"
-        self.session_timeout = 600  # 10分钟超时
+        self.session_timeout = 300  # 5分钟超时
         self._ensure_users_file()
     
     def _ensure_users_file(self):
@@ -85,7 +85,7 @@ class AuthManager:
                     
                     const data = JSON.parse(authData);
                     const now = Date.now();
-                    const timeout = 10 * 60 * 1000; // 10分钟
+                    const timeout = 5 * 60 * 1000; // 5分钟
                     
                     // 检查是否超时
                     if (now - data.lastActivity > timeout) {
@@ -242,9 +242,23 @@ class AuthManager:
         logger.debug(f"🔍 [认证检查] authenticated: {authenticated}, login_time: {login_time}, current_time: {current_time}")
         
         if authenticated:
+            # 如果login_time无效（为0或None），说明可能是刷新页面导致的状态丢失
+            # 在这种情况下，更新login_time为当前时间，避免误判为超时
+            if not login_time or login_time <= 0:
+                logger.info(f"🔄 [认证检查] 检测到无效的login_time，更新为当前时间（可能是页面刷新）")
+                login_time = current_time
+                st.session_state.login_time = login_time
+            
             # 检查会话超时
             time_elapsed = current_time - login_time
             logger.debug(f"🔍 [认证检查] 会话时长: {time_elapsed:.1f}秒, 超时限制: {self.session_timeout}秒")
+            
+            # 如果时间差为负数或异常大，说明时间计算有问题，重置login_time
+            if time_elapsed < 0 or time_elapsed > 86400:  # 超过24小时认为是异常
+                logger.warning(f"⚠️ [认证检查] 检测到异常的时间差: {time_elapsed:.1f}秒，重置login_time")
+                login_time = current_time
+                st.session_state.login_time = login_time
+                time_elapsed = 0
             
             if time_elapsed > self.session_timeout:
                 logger.info(f"⏰ 会话超时，自动登出 (已过时间: {time_elapsed:.1f}秒)")

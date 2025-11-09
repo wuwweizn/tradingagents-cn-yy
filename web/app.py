@@ -454,14 +454,27 @@ def check_frontend_auth_cache():
         if not auth_manager.is_authenticated() and st.session_state.get('user_info'):
             logger.info("🔄 同步认证状态到auth_manager")
             try:
-                auth_manager.login_user(
+                # 使用restore_from_cache方法恢复认证状态
+                login_time = st.session_state.get('login_time', time.time())
+                # 如果login_time无效，使用当前时间（刷新页面时的情况）
+                if not login_time or login_time <= 0:
+                    login_time = time.time()
+                    st.session_state.login_time = login_time
+                
+                auth_manager.restore_from_cache(
                     st.session_state.user_info, 
-                    st.session_state.get('login_time', time.time())
+                    login_time
                 )
                 logger.info("✅ 认证状态同步成功")
             except Exception as e:
                 logger.warning(f"⚠️ 认证状态同步失败: {e}")
         else:
+            # 即使已认证，也检查并更新login_time（防止刷新页面时丢失）
+            if st.session_state.get('authenticated', False) and st.session_state.get('user_info'):
+                login_time = st.session_state.get('login_time', 0)
+                if not login_time or login_time <= 0:
+                    logger.info("🔄 刷新页面检测：更新login_time")
+                    st.session_state.login_time = time.time()
             logger.info("✅ 用户已认证，跳过缓存检查")
         return
     
@@ -559,7 +572,7 @@ def inject_frontend_cache_check():
             }
             
             const now = Date.now();
-            const timeout = 10 * 60 * 1000; // 10分钟
+            const timeout = 5 * 60 * 1000; // 5分钟
             const timeSinceLastActivity = now - data.lastActivity;
             
             console.log('⏰ 时间检查:', {
