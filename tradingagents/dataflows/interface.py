@@ -353,8 +353,9 @@ def get_google_news(
         market_info = StockUtils.get_market_info(query.split()[0])
         if market_info['is_china']:
             is_china_stock = True
-    except Exception:
+    except Exception as e:
         # 如果StockUtils判断失败，使用上面的简单判断
+        logger.debug(f"StockUtils判断市场类型失败: {e}，使用简单判断")
         pass
     
     # 对A股查询添加中文关键词

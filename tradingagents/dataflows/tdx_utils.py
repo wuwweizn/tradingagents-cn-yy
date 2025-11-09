@@ -125,7 +125,9 @@ class TongDaXinDataProvider:
                 with open(config_file, 'r', encoding='utf-8') as f:
                     config = json.load(f)
                     return config.get('working_servers', [])
-        except Exception:
+        except Exception as e:
+            # 配置文件读取失败，返回空列表
+            logger.debug(f"读取TDX配置文件失败: {e}")
             pass
         return []
     

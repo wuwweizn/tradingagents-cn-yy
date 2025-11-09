@@ -326,8 +326,62 @@ def create_news_analyst(llm, toolkit):
                     logger.error(f"[新闻分析师] ❌ 强制补救过程失败: {e}")
                     report = result.content
             else:
-                # 有工具调用，直接使用结果
-                report = result.content
+                # 有工具调用，需要验证工具是否真正执行
+                # 🔧 检测 DashScope 的假调用问题
+                used_tool_names = []
+                if hasattr(result, 'tool_calls') and result.tool_calls:
+                    for tool_call in result.tool_calls:
+                        tool_name = tool_call.get('name', 'unknown')
+                        used_tool_names.append(tool_name)
+                
+                # 检测 DashScope 特定的假调用问题
+                is_dashscope = 'DashScope' in llm.__class__.__name__ or 'dashscope' in llm.__class__.__name__.lower()
+                
+                if is_dashscope and tool_call_count > 0 and 'get_realtime_stock_news' in used_tool_names:
+                    # DashScope 可能声称调用了工具但实际未执行
+                    logger.warning(f"[新闻分析师] ⚠️ 检测到 DashScope 工具调用，验证工具是否真正执行...")
+                    
+                    try:
+                        # 强制调用工具进行验证
+                        logger.info(f"[新闻分析师] 🔧 强制调用 get_realtime_stock_news 进行验证...")
+                        verification_news = unified_news_tool(stock_code=ticker, max_news=10, model_info="")
+                        
+                        if verification_news and len(verification_news.strip()) > 100:
+                            # 工具确实可以执行，说明之前的调用可能失败了
+                            logger.warning(f"[新闻分析师] ⚠️ 工具验证成功，但之前的调用可能未执行，使用验证结果重新生成分析...")
+                            
+                            # 基于验证的新闻数据重新生成分析
+                            verification_prompt = f"""
+您是一位专业的财经新闻分析师。请基于以下最新获取的新闻数据，对股票 {ticker} 进行详细的新闻分析：
+
+=== 最新新闻数据 ===
+{verification_news}
+
+=== 分析要求 ===
+{system_message}
+
+请基于上述真实新闻数据撰写详细的中文分析报告。
+"""
+                            
+                            logger.info(f"[新闻分析师] 🔄 基于验证的新闻数据重新生成完整分析...")
+                            verification_result = llm.invoke([{"role": "user", "content": verification_prompt}])
+                            
+                            if hasattr(verification_result, 'content') and verification_result.content:
+                                report = verification_result.content
+                                logger.info(f"[新闻分析师] ✅ DashScope 假调用修复成功，生成基于真实数据的报告，长度: {len(report)} 字符")
+                            else:
+                                logger.warning(f"[新闻分析师] ⚠️ 验证后重新生成失败，使用原始结果")
+                                report = result.content
+                        else:
+                            logger.warning(f"[新闻分析师] ⚠️ 工具验证失败，使用原始结果")
+                            report = result.content
+                            
+                    except Exception as verification_error:
+                        logger.error(f"[新闻分析师] ❌ 工具验证过程失败: {verification_error}")
+                        report = result.content
+                else:
+                    # 非 DashScope 或没有检测到假调用问题，直接使用结果
+                    report = result.content
         
         total_time_taken = (datetime.now() - start_time).total_seconds()
         logger.info(f"[新闻分析师] 新闻分析完成，总耗时: {total_time_taken:.2f}秒")

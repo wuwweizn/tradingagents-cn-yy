@@ -217,9 +217,33 @@ class ChatDashScope(BaseChatModel):
             else:
                 # 尝试转换为 OpenAI 工具格式
                 try:
-                    formatted_tools.append(convert_to_openai_tool(tool))
-                except Exception:
-                    pass
+                    openai_tool = convert_to_openai_tool(tool)
+                    formatted_tools.append(openai_tool)
+                    logger.debug(f"✅ 工具转换成功: {getattr(tool, 'name', 'unknown')}")
+                except Exception as e:
+                    # 记录错误并提供回退机制
+                    tool_name = getattr(tool, 'name', 'unknown')
+                    logger.warning(f"⚠️ 工具转换失败: {tool_name} - {e}")
+                    
+                    # 尝试手动创建基本工具格式作为回退
+                    try:
+                        fallback_tool = {
+                            "type": "function",
+                            "function": {
+                                "name": tool_name,
+                                "description": getattr(tool, 'description', f'工具: {tool_name}'),
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {},
+                                    "required": []
+                                }
+                            }
+                        }
+                        formatted_tools.append(fallback_tool)
+                        logger.info(f"🔄 使用回退工具格式: {tool_name}")
+                    except Exception as fallback_error:
+                        logger.error(f"❌ 回退工具格式创建失败: {tool_name} - {fallback_error}")
+                        # 如果回退也失败，至少记录警告，不静默失败
 
         # 创建新实例，保存工具信息
         new_instance = self.__class__(

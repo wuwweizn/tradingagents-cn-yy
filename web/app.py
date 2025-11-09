@@ -1244,10 +1244,10 @@ def main():
                         points_detail = " + ".join(parts) if parts else "不消耗点数（所有点数消耗功能已关闭）"
                         
                         if points_cost > 0:
-                        if not _auth.try_deduct_points(username, points_cost):
+                            if not _auth.try_deduct_points(username, points_cost):
                                 st.error(f"点数不足，需要 {points_cost} 点（{points_detail}），无法开始分析")
-                            return
-                        else:
+                                return
+                            else:
                                 st.success(f"已扣除 {points_cost} 点（{points_detail}），剩余点数: {_auth.get_user_points(username)}")
                         else:
                             # 如果配置为不消耗点数，直接通过
@@ -1889,10 +1889,10 @@ def render_batch_analysis_page():
                     points_detail = " + ".join(parts) if parts else "不消耗点数（所有点数消耗功能已关闭）"
                     
                     if need_points > 0:
-                    if not _auth.try_deduct_points(username, need_points):
+                        if not _auth.try_deduct_points(username, need_points):
                             st.error(f"点数不足，需要 {need_points} 点（{len(form_data['stock_symbols'])} 个股票 × {points_per_stock} 点/股票，{points_detail}），无法开始批量分析")
-                        return
-                    else:
+                            return
+                        else:
                             st.success(f"已扣除 {need_points} 点（{len(form_data['stock_symbols'])} 个股票 × {points_per_stock} 点/股票，{points_detail}），剩余点数: {_auth.get_user_points(username)}")
                     else:
                         # 如果配置为不消耗点数，直接通过
