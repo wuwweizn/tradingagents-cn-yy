@@ -6,7 +6,7 @@
 
 import json
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 # 配置文件路径
 CONFIG_FILE = Path(__file__).parent.parent / "config" / "model_points.json"
@@ -304,6 +304,51 @@ def format_points_display(points: int) -> str:
         return str(int(points))
     else:
         return str(points)
+
+
+def get_available_providers() -> List[str]:
+    """
+    获取所有可用的提供商列表（从默认配置中提取）
+    
+    Returns:
+        提供商名称列表，按字母顺序排序
+    """
+    providers = set()
+    # 从默认配置中提取所有提供商
+    for provider, _ in DEFAULT_MODEL_POINTS_CONFIG.keys():
+        providers.add(provider)
+    # 从当前配置中提取所有提供商（可能包含用户自定义的）
+    config = _get_config()
+    for provider, _ in config.keys():
+        providers.add(provider)
+    return sorted(list(providers))
+
+
+def get_available_models(provider: str) -> List[str]:
+    """
+    获取指定提供商下的所有可用模型列表
+    
+    Args:
+        provider: 提供商名称
+    
+    Returns:
+        模型名称列表，按字母顺序排序
+    """
+    provider_lower = str(provider).lower().strip()
+    models = set()
+    
+    # 从默认配置中提取该提供商的所有模型
+    for (config_provider, model) in DEFAULT_MODEL_POINTS_CONFIG.keys():
+        if config_provider.lower() == provider_lower:
+            models.add(model)
+    
+    # 从当前配置中提取该提供商的所有模型（可能包含用户自定义的）
+    config = _get_config()
+    for (config_provider, model) in config.keys():
+        if config_provider.lower() == provider_lower:
+            models.add(model)
+    
+    return sorted(list(models))
 
 
 def _load_research_depth_config() -> Dict[int, int]:

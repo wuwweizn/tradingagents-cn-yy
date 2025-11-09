@@ -287,7 +287,9 @@ def render_model_points_config():
             delete_model_points,
             get_model_points,
             reload_config,
-            DEFAULT_POINTS
+            DEFAULT_POINTS,
+            get_available_providers,
+            get_available_models
         )
     except ImportError:
         st.error("无法导入模型点数管理模块")
@@ -377,13 +379,66 @@ def render_model_points_config():
     # 添加新配置
     st.markdown("**添加新模型点数配置**")
     
+    # 获取所有可用的提供商和模型
+    available_providers = get_available_providers()
+    
+    # 添加手动输入选项
+    use_manual_input = st.checkbox("手动输入（如果列表中没有所需的提供商或模型）", key="use_manual_input")
+    
     col1, col2, col3 = st.columns([2, 2, 1])
     
     with col1:
-        new_provider = st.text_input("提供商", placeholder="例如: dashscope, google, openai", key="new_provider")
+        # 提供商下拉选择或手动输入
+        if not use_manual_input and available_providers:
+            selected_provider_idx = st.selectbox(
+                "提供商",
+                options=range(len(available_providers)),
+                format_func=lambda x: available_providers[x],
+                key="new_provider_select",
+                help="从列表中选择提供商，或勾选上方的手动输入选项"
+            )
+            new_provider = available_providers[selected_provider_idx] if selected_provider_idx is not None else ""
+        else:
+            new_provider = st.text_input(
+                "提供商", 
+                placeholder="例如: dashscope, google, openai", 
+                key="new_provider_manual",
+                value="" if use_manual_input else ""
+            )
     
     with col2:
-        new_model = st.text_input("模型名称", placeholder="例如: qwen-turbo, gemini-2.5-pro", key="new_model")
+        # 根据选择的提供商动态显示模型列表
+        if new_provider:
+            if not use_manual_input:
+                available_models = get_available_models(new_provider)
+                if available_models:
+                    selected_model_idx = st.selectbox(
+                        "模型名称",
+                        options=range(len(available_models)),
+                        format_func=lambda x: available_models[x],
+                        key="new_model_select",
+                        help="从列表中选择模型"
+                    )
+                    new_model = available_models[selected_model_idx] if selected_model_idx is not None else ""
+                else:
+                    new_model = st.text_input(
+                        "模型名称", 
+                        placeholder="该提供商暂无预设模型，请手动输入", 
+                        key="new_model_manual_fallback"
+                    )
+            else:
+                new_model = st.text_input(
+                    "模型名称", 
+                    placeholder="手动输入模型名称", 
+                    key="new_model_manual_input"
+                )
+        else:
+            new_model = st.text_input(
+                "模型名称", 
+                placeholder="请先选择或输入提供商", 
+                key="new_model_disabled", 
+                disabled=True
+            )
     
     with col3:
         new_points_value = st.number_input("消耗点数", min_value=1, value=1, step=1, key="new_points")
@@ -403,7 +458,7 @@ def render_model_points_config():
                 else:
                     st.error("添加失败")
         else:
-            st.error("请填写提供商和模型名称")
+            st.error("请选择提供商和模型名称")
     
     st.markdown("---")
     
