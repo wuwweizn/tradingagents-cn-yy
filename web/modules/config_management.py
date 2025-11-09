@@ -39,7 +39,7 @@ def render_config_management():
     st.sidebar.title("配置选项")
     page = st.sidebar.selectbox(
         "选择功能",
-        ["模型配置", "定价设置", "模型点数设置", "使用统计", "系统设置"]
+        ["模型配置", "定价设置", "模型点数设置", "研究深度点数设置", "使用统计", "系统设置"]
     )
     
     if page == "模型配置":
@@ -48,6 +48,8 @@ def render_config_management():
         render_pricing_config()
     elif page == "模型点数设置":
         render_model_points_config()
+    elif page == "研究深度点数设置":
+        render_research_depth_points_config()
     elif page == "使用统计":
         render_usage_statistics()
     elif page == "系统设置":
@@ -407,6 +409,115 @@ def render_model_points_config():
     
     # 显示默认点数说明
     st.info(f"**说明**：未配置的模型将使用默认点数 {DEFAULT_POINTS} 点")
+
+
+def render_research_depth_points_config():
+    """渲染研究深度点数配置页面"""
+    st.markdown("**研究深度点数设置**")
+    st.markdown("管理员可以设置不同研究深度级别使用时的消耗点数（1级最低，5级最高）")
+    
+    # 导入研究深度点数管理器
+    try:
+        from utils.model_points import (
+            get_all_research_depth_points, 
+            set_research_depth_points, 
+            get_research_depth_points,
+            reload_config,
+            DEFAULT_RESEARCH_DEPTH_POINTS_CONFIG
+        )
+    except ImportError:
+        st.error("无法导入研究深度点数管理模块")
+        return
+    
+    # 重新加载配置（确保获取最新数据）
+    reload_config()
+    
+    # 获取所有配置
+    all_config = get_all_research_depth_points()
+    
+    # 显示当前配置
+    st.markdown("**当前研究深度点数配置**")
+    
+    if all_config:
+        # 显示配置表格
+        config_data = []
+        depth_names = {
+            1: "1级 - 快速分析",
+            2: "2级 - 基础分析",
+            3: "3级 - 标准分析",
+            4: "4级 - 深度分析",
+            5: "5级 - 全面分析"
+        }
+        
+        for depth in sorted(all_config.keys()):
+            points = all_config[depth]
+            config_data.append({
+                "研究深度": f"{depth}级",
+                "级别名称": depth_names.get(depth, f"{depth}级"),
+                "消耗点数": points
+            })
+        
+        df = pd.DataFrame(config_data)
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("暂无研究深度点数配置")
+    
+    st.markdown("---")
+    
+    # 编辑配置
+    st.markdown("**编辑研究深度点数配置**")
+    
+    # 定义研究深度名称（在函数内部定义，确保可用）
+    depth_names = {
+        1: "1级 - 快速分析",
+        2: "2级 - 基础分析",
+        3: "3级 - 标准分析",
+        4: "4级 - 深度分析",
+        5: "5级 - 全面分析"
+    }
+    
+    if all_config:
+        # 选择要编辑的研究深度
+        selected_depth = st.selectbox(
+            "选择研究深度",
+            options=sorted(all_config.keys()),
+            format_func=lambda x: f"{x}级 - {depth_names.get(x, '未知')}",
+            key="edit_research_depth"
+        )
+        
+        if selected_depth:
+            current_points = all_config.get(selected_depth, 1)
+            
+            col_edit, col_save = st.columns([3, 1])
+            
+            with col_edit:
+                new_points = st.number_input(
+                    "消耗点数",
+                    min_value=1,
+                    value=current_points,
+                    step=1,
+                    key=f"edit_points_{selected_depth}"
+                )
+            
+            with col_save:
+                st.write("")  # 占位
+                st.write("")  # 占位
+                if st.button("保存配置", type="primary", key=f"save_research_depth_{selected_depth}"):
+                    if set_research_depth_points(selected_depth, new_points):
+                        st.success("配置已保存！")
+                        st.rerun()
+                    else:
+                        st.error("保存失败")
+    
+    st.markdown("---")
+    
+    # 显示默认配置说明
+    st.info("**说明**：研究深度级别从1级到5级，级别越高分析越详细，消耗的点数也越多。当前默认配置：")
+    default_info = []
+    for depth in sorted(DEFAULT_RESEARCH_DEPTH_POINTS_CONFIG.keys()):
+        points = DEFAULT_RESEARCH_DEPTH_POINTS_CONFIG[depth]
+        default_info.append(f"- {depth}级: {points}点")
+    st.markdown("\n".join(default_info))
 
 
 def render_usage_statistics():

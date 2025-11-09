@@ -85,19 +85,60 @@ def render_batch_analysis_form():
         with col2:
             # 研究深度
             cached_depth = cached_config.get('research_depth', 3) if cached_config else 3
+            
+            # 获取研究深度对应的点数消耗
+            try:
+                from utils.model_points import get_research_depth_points
+                # 预先获取所有级别的点数
+                depth_points_map = {
+                    1: get_research_depth_points(1),
+                    2: get_research_depth_points(2),
+                    3: get_research_depth_points(3),
+                    4: get_research_depth_points(4),
+                    5: get_research_depth_points(5)
+                }
+                depth_points = depth_points_map.get(cached_depth, 1)
+                help_text = f"选择分析的深度级别，级别越高分析越详细但耗时更长\n当前选择：{cached_depth}级，每个股票消耗 {depth_points} 点"
+                
+                # 定义格式函数
+                def format_depth(x):
+                    points = depth_points_map.get(x, 1)
+                    depth_names = {
+                        1: "1级 - 快速分析",
+                        2: "2级 - 基础分析",
+                        3: "3级 - 标准分析",
+                        4: "4级 - 深度分析",
+                        5: "5级 - 全面分析"
+                    }
+                    return f"{depth_names.get(x, f'{x}级')} ({points}点/股票)"
+            except Exception:
+                help_text = "选择分析的深度级别，级别越高分析越详细但耗时更长"
+                depth_points_map = {}
+                def format_depth(x):
+                    depth_names = {
+                        1: "1级 - 快速分析",
+                        2: "2级 - 基础分析",
+                        3: "3级 - 标准分析",
+                        4: "4级 - 深度分析",
+                        5: "5级 - 全面分析"
+                    }
+                    return depth_names.get(x, f"{x}级")
+            
             research_depth = st.select_slider(
                 "研究深度 🔍",
                 options=[1, 2, 3, 4, 5],
                 value=cached_depth,
-                format_func=lambda x: {
-                    1: "1级 - 快速分析",
-                    2: "2级 - 基础分析", 
-                    3: "3级 - 标准分析",
-                    4: "4级 - 深度分析",
-                    5: "5级 - 全面分析"
-                }[x],
-                help="选择分析的深度级别，级别越高分析越详细但耗时更长"
+                format_func=format_depth,
+                help=help_text
             )
+            
+            # 显示当前选择的点数消耗（在解析股票代码后显示总消耗）
+            if depth_points_map:
+                try:
+                    current_points = depth_points_map.get(research_depth, 1)
+                    st.caption(f"💡 每个股票将消耗 {current_points} 点（具体总消耗取决于股票数量）")
+                except Exception:
+                    pass
             
             # 分析间隔设置
             analysis_interval = st.number_input(
@@ -226,9 +267,18 @@ def render_batch_analysis_form():
         if stock_symbols:
             st.success(f"✅ 已解析 {len(stock_symbols)} 个股票代码: {', '.join(stock_symbols)}")
             
-            # 显示预估分析时间
+            # 显示预估分析时间和点数消耗
             estimated_time = len(stock_symbols) * (research_depth * 30 + 60) + (len(stock_symbols) - 1) * analysis_interval
             st.info(f"⏱️ 预估分析时间: {estimated_time // 60}分{estimated_time % 60}秒")
+            
+            # 显示预估点数消耗
+            try:
+                from utils.model_points import get_research_depth_points
+                points_per_stock = get_research_depth_points(research_depth)
+                total_points = len(stock_symbols) * points_per_stock
+                st.info(f"💰 预估点数消耗: {total_points} 点（{len(stock_symbols)} 个股票 × {points_per_stock} 点/股票，研究深度 {research_depth} 级）")
+            except Exception:
+                pass
         else:
             st.info("💡 请在上方输入股票代码，支持逗号或换行分隔")
 

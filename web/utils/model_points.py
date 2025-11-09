@@ -1,6 +1,7 @@
 """
 模型点数配置
 定义不同LLM模型分析时消耗的点数
+同时支持研究深度级别（1-5级）的点数配置
 """
 
 import json
@@ -60,6 +61,17 @@ DEFAULT_MODEL_POINTS_CONFIG = {
 
 # 默认点数（当模型未配置时使用）
 DEFAULT_POINTS = 1
+
+# 研究深度点数配置表
+# 格式: research_depth: points
+# 1级最低，5级最高
+DEFAULT_RESEARCH_DEPTH_POINTS_CONFIG = {
+    1: 1,  # 1级 - 快速分析：最低成本
+    2: 2,  # 2级 - 基础分析：较低成本
+    3: 3,  # 3级 - 标准分析：中等成本
+    4: 5,  # 4级 - 深度分析：较高成本
+    5: 8,  # 5级 - 全面分析：最高成本
+}
 
 
 def _load_config() -> Dict[Tuple[str, str], int]:
@@ -138,7 +150,9 @@ def _get_config() -> Dict[Tuple[str, str], int]:
 def reload_config():
     """重新加载配置（用于管理员修改配置后）"""
     global _CONFIG_CACHE
+    global _RESEARCH_DEPTH_CONFIG_CACHE
     _CONFIG_CACHE = _load_config()
+    _RESEARCH_DEPTH_CONFIG_CACHE = _load_research_depth_config()
 
 
 def get_model_points(llm_provider: str, llm_model: str) -> int:
@@ -251,6 +265,130 @@ def format_points_display(points: int) -> str:
         return str(points)
 
 
+def _load_research_depth_config() -> Dict[int, int]:
+    """
+    从配置文件加载研究深度点数配置
+    
+    Returns:
+        格式: {research_depth: points}
+    """
+    try:
+        if CONFIG_FILE.exists():
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # 检查是否有研究深度配置
+                research_depth_config = data.get('research_depth_points', {})
+                if research_depth_config:
+                    config = {}
+                    for depth_str, points in research_depth_config.items():
+                        try:
+                            depth = int(depth_str)
+                            config[depth] = int(points)
+                        except (ValueError, TypeError):
+                            continue
+                    # 确保所有1-5级都有配置
+                    for depth in range(1, 6):
+                        if depth not in config:
+                            config[depth] = DEFAULT_RESEARCH_DEPTH_POINTS_CONFIG.get(depth, 1)
+                    return config
+    except Exception:
+        pass
+    
+    # 如果加载失败，返回默认配置
+    return DEFAULT_RESEARCH_DEPTH_POINTS_CONFIG.copy()
+
+
+# 全局研究深度配置缓存
+_RESEARCH_DEPTH_CONFIG_CACHE: Dict[int, int] = None
+
+
+def _get_research_depth_config() -> Dict[int, int]:
+    """获取研究深度配置（带缓存）"""
+    global _RESEARCH_DEPTH_CONFIG_CACHE
+    if _RESEARCH_DEPTH_CONFIG_CACHE is None:
+        _RESEARCH_DEPTH_CONFIG_CACHE = _load_research_depth_config()
+    return _RESEARCH_DEPTH_CONFIG_CACHE
+
+
+def get_research_depth_points(research_depth: int) -> int:
+    """
+    根据研究深度获取消耗的点数
+    
+    Args:
+        research_depth: 研究深度级别 (1-5)
+    
+    Returns:
+        消耗的点数
+    
+    Raises:
+        ValueError: 如果研究深度不在1-5范围内
+    """
+    if not isinstance(research_depth, int) or research_depth < 1 or research_depth > 5:
+        raise ValueError(f"研究深度必须在1-5之间，当前值: {research_depth}")
+    
+    # 获取配置
+    config = _get_research_depth_config()
+    
+    # 返回对应级别的点数，如果未配置则返回默认值
+    return config.get(research_depth, DEFAULT_RESEARCH_DEPTH_POINTS_CONFIG.get(research_depth, 1))
+
+
+def get_all_research_depth_points() -> Dict[int, int]:
+    """
+    获取所有研究深度的点数配置
+    
+    Returns:
+        格式: {research_depth: points}
+    """
+    return _get_research_depth_config().copy()
+
+
+def set_research_depth_points(research_depth: int, points: int) -> bool:
+    """
+    设置指定研究深度的点数
+    
+    Args:
+        research_depth: 研究深度级别 (1-5)
+        points: 消耗的点数
+    
+    Returns:
+        是否保存成功
+    """
+    if not isinstance(research_depth, int) or research_depth < 1 or research_depth > 5:
+        return False
+    
+    try:
+        # 加载现有配置
+        if CONFIG_FILE.exists():
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        else:
+            data = {
+                'version': '1.0',
+                'default_points': DEFAULT_POINTS,
+                'config': [],
+                'research_depth_points': {}
+            }
+        
+        # 更新研究深度配置
+        if 'research_depth_points' not in data:
+            data['research_depth_points'] = {}
+        data['research_depth_points'][str(research_depth)] = int(points)
+        
+        # 保存配置
+        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        
+        # 重新加载配置缓存
+        global _RESEARCH_DEPTH_CONFIG_CACHE
+        _RESEARCH_DEPTH_CONFIG_CACHE = _load_research_depth_config()
+        
+        return True
+    except Exception:
+        return False
+
+
 # 创建模型点数管理器对象（兼容旧代码）
 class ModelPointsManager:
     """模型点数管理器类"""
@@ -270,6 +408,18 @@ class ModelPointsManager:
     def delete_model_points(self, llm_provider: str, llm_model: str) -> bool:
         """删除指定模型的点数配置"""
         return delete_model_points(llm_provider, llm_model)
+    
+    def get_research_depth_points(self, research_depth: int) -> int:
+        """获取指定研究深度消耗的点数"""
+        return get_research_depth_points(research_depth)
+    
+    def get_all_research_depth_points(self) -> Dict[int, int]:
+        """获取所有研究深度的点数配置"""
+        return get_all_research_depth_points()
+    
+    def set_research_depth_points(self, research_depth: int, points: int) -> bool:
+        """设置指定研究深度的点数"""
+        return set_research_depth_points(research_depth, points)
 
 
 # 创建全局实例（兼容旧代码）

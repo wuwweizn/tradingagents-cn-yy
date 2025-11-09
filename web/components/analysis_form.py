@@ -104,19 +104,60 @@ def render_analysis_form():
         with col2:
             # 研究深度（使用缓存的值）
             cached_depth = cached_config.get('research_depth', 3) if cached_config else 3
+            
+            # 获取研究深度对应的点数消耗
+            try:
+                from utils.model_points import get_research_depth_points
+                # 预先获取所有级别的点数
+                depth_points_map = {
+                    1: get_research_depth_points(1),
+                    2: get_research_depth_points(2),
+                    3: get_research_depth_points(3),
+                    4: get_research_depth_points(4),
+                    5: get_research_depth_points(5)
+                }
+                depth_points = depth_points_map.get(cached_depth, 1)
+                help_text = f"选择分析的深度级别，级别越高分析越详细但耗时更长\n当前选择：{cached_depth}级，消耗 {depth_points} 点"
+                
+                # 定义格式函数
+                def format_depth(x):
+                    points = depth_points_map.get(x, 1)
+                    depth_names = {
+                        1: "1级 - 快速分析",
+                        2: "2级 - 基础分析",
+                        3: "3级 - 标准分析",
+                        4: "4级 - 深度分析",
+                        5: "5级 - 全面分析"
+                    }
+                    return f"{depth_names.get(x, f'{x}级')} ({points}点)"
+            except Exception:
+                help_text = "选择分析的深度级别，级别越高分析越详细但耗时更长"
+                depth_points_map = {}
+                def format_depth(x):
+                    depth_names = {
+                        1: "1级 - 快速分析",
+                        2: "2级 - 基础分析",
+                        3: "3级 - 标准分析",
+                        4: "4级 - 深度分析",
+                        5: "5级 - 全面分析"
+                    }
+                    return depth_names.get(x, f"{x}级")
+            
             research_depth = st.select_slider(
                 "研究深度 🔍",
                 options=[1, 2, 3, 4, 5],
                 value=cached_depth,
-                format_func=lambda x: {
-                    1: "1级 - 快速分析",
-                    2: "2级 - 基础分析",
-                    3: "3级 - 标准分析",
-                    4: "4级 - 深度分析",
-                    5: "5级 - 全面分析"
-                }[x],
-                help="选择分析的深度级别，级别越高分析越详细但耗时更长"
+                format_func=format_depth,
+                help=help_text
             )
+            
+            # 显示当前选择的点数消耗
+            if depth_points_map:
+                try:
+                    current_points = depth_points_map.get(research_depth, 1)
+                    st.caption(f"💡 当前研究深度将消耗 {current_points} 点")
+                except Exception:
+                    pass
         
         # 分析师团队选择
         st.markdown("### 👥 选择分析师团队")
