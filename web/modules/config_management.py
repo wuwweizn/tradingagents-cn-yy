@@ -407,6 +407,235 @@ def render_model_points_config():
     
     st.markdown("---")
     
+    # 批量导出和导入功能
+    st.markdown("**批量导出/导入配置**")
+    st.markdown("可以导出当前所有配置到JSON或Excel文件，或从JSON/Excel文件批量导入配置")
+    
+    col_export, col_import = st.columns(2)
+    
+    with col_export:
+        st.markdown("**导出配置**")
+        
+        # 导出格式选择
+        export_format = st.radio(
+            "导出格式",
+            ["JSON格式", "Excel格式"],
+            horizontal=True,
+            key="export_format_radio"
+        )
+        
+        if export_format == "JSON格式":
+            if st.button("📥 导出配置为JSON", type="primary", key="export_model_points_json"):
+                try:
+                    from utils.model_points import export_config_to_json
+                    import tempfile
+                    from datetime import datetime
+                    
+                    # 创建临时文件
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    temp_file = tempfile.NamedTemporaryFile(
+                        mode='w',
+                        suffix=f'_model_points_{timestamp}.json',
+                        delete=False,
+                        encoding='utf-8'
+                    )
+                    temp_file.close()
+                    
+                    # 导出配置
+                    file_path = export_config_to_json(temp_file.name)
+                    
+                    # 读取文件内容用于下载
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        file_content = f.read()
+                    
+                    # 提供下载
+                    st.download_button(
+                        label="💾 下载JSON配置文件",
+                        data=file_content,
+                        file_name=f"model_points_config_{timestamp}.json",
+                        mime="application/json",
+                        key="download_model_points_config_json"
+                    )
+                    
+                    st.success("✅ 配置导出成功！点击上方按钮下载文件")
+                    
+                    # 显示导出预览
+                    with st.expander("📋 查看导出内容预览"):
+                        st.json(file_content[:2000] + "..." if len(file_content) > 2000 else file_content)
+                        
+                except Exception as e:
+                    st.error(f"❌ 导出失败: {str(e)}")
+        else:  # Excel格式
+            if st.button("📥 导出配置为Excel", type="primary", key="export_model_points_excel"):
+                try:
+                    from utils.model_points import export_config_to_excel
+                    from datetime import datetime
+                    import tempfile
+                    
+                    # 创建临时文件
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    temp_file = tempfile.NamedTemporaryFile(
+                        suffix=f'_model_points_{timestamp}.xlsx',
+                        delete=False
+                    )
+                    temp_file.close()
+                    
+                    # 导出配置
+                    file_path = export_config_to_excel(temp_file.name)
+                    
+                    # 读取文件内容用于下载
+                    with open(file_path, 'rb') as f:
+                        file_content = f.read()
+                    
+                    # 提供下载
+                    st.download_button(
+                        label="💾 下载Excel配置文件",
+                        data=file_content,
+                        file_name=f"model_points_config_{timestamp}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_model_points_config_excel"
+                    )
+                    
+                    st.success("✅ Excel配置导出成功！点击上方按钮下载文件")
+                    st.info("💡 Excel文件包含多个工作表：模型点数配置、研究深度配置、开关配置、配置信息")
+                    
+                except ImportError as e:
+                    st.error("❌ 导出失败: 需要安装openpyxl库")
+                    st.code("pip install openpyxl", language="bash")
+                except Exception as e:
+                    st.error(f"❌ 导出失败: {str(e)}")
+    
+    with col_import:
+        st.markdown("**导入配置**")
+        
+        # 导入模式选择
+        import_mode = st.radio(
+            "导入模式",
+            ["合并模式", "覆盖模式"],
+            help="合并模式：保留现有配置，只更新导入的配置项\n覆盖模式：完全替换现有配置",
+            key="import_mode_radio"
+        )
+        merge_mode = (import_mode == "合并模式")
+        
+        # 文件上传（支持JSON和Excel）
+        uploaded_file = st.file_uploader(
+            "选择配置文件（支持JSON或Excel格式）",
+            type=['json', 'xlsx', 'xls'],
+            key="upload_model_points_config"
+        )
+        
+        if uploaded_file is not None:
+            file_extension = uploaded_file.name.split('.')[-1].lower()
+            
+            try:
+                if file_extension == 'json':
+                    # JSON格式导入
+                    json_data = uploaded_file.read().decode('utf-8')
+                    
+                    # 显示文件预览
+                    with st.expander("📋 查看导入文件内容"):
+                        st.json(json_data[:2000] + "..." if len(json_data) > 2000 else json_data)
+                    
+                    # 导入按钮
+                    if st.button("📤 导入配置", type="primary", key="import_model_points_json"):
+                        from utils.model_points import import_config_from_json
+                        
+                        # 执行导入
+                        success, stats = import_config_from_json(json_data, merge_mode=merge_mode)
+                        
+                        if success:
+                            st.success("✅ 配置导入成功！")
+                            
+                            # 显示导入统计
+                            st.info(f"""
+                            **导入统计：**
+                            - 新增模型配置: {stats['model_points_added']} 个
+                            - 更新模型配置: {stats['model_points_updated']} 个
+                            - 更新研究深度配置: {stats['research_depth_updated']} 个
+                            - 更新开关配置: {'是' if stats['toggle_updated'] else '否'}
+                            """)
+                            
+                            if stats['errors']:
+                                st.warning(f"⚠️ 导入过程中有 {len(stats['errors'])} 个警告/错误")
+                                with st.expander("查看详细错误信息"):
+                                    for error in stats['errors']:
+                                        st.text(f"- {error}")
+                            
+                            st.rerun()
+                        else:
+                            st.error("❌ 配置导入失败！")
+                            if stats.get('errors'):
+                                st.error("**错误信息：**")
+                                for error in stats['errors']:
+                                    st.text(f"- {error}")
+                
+                elif file_extension in ['xlsx', 'xls']:
+                    # Excel格式导入
+                    import tempfile
+                    import os
+                    
+                    # 保存上传的文件到临时位置
+                    temp_file = tempfile.NamedTemporaryFile(
+                        suffix=f'.{file_extension}',
+                        delete=False
+                    )
+                    temp_file.write(uploaded_file.read())
+                    temp_file.close()
+                    
+                    st.info(f"📄 已上传Excel文件: {uploaded_file.name}")
+                    st.info("💡 Excel文件应包含以下工作表：模型点数配置、研究深度配置、开关配置")
+                    
+                    # 导入按钮
+                    if st.button("📤 导入配置", type="primary", key="import_model_points_excel"):
+                        from utils.model_points import import_config_from_excel
+                        
+                        # 执行导入
+                        success, stats = import_config_from_excel(temp_file.name, merge_mode=merge_mode)
+                        
+                        # 删除临时文件
+                        try:
+                            os.unlink(temp_file.name)
+                        except:
+                            pass
+                        
+                        if success:
+                            st.success("✅ 配置导入成功！")
+                            
+                            # 显示导入统计
+                            st.info(f"""
+                            **导入统计：**
+                            - 新增模型配置: {stats['model_points_added']} 个
+                            - 更新模型配置: {stats['model_points_updated']} 个
+                            - 更新研究深度配置: {stats['research_depth_updated']} 个
+                            - 更新开关配置: {'是' if stats['toggle_updated'] else '否'}
+                            """)
+                            
+                            if stats['errors']:
+                                st.warning(f"⚠️ 导入过程中有 {len(stats['errors'])} 个警告/错误")
+                                with st.expander("查看详细错误信息"):
+                                    for error in stats['errors']:
+                                        st.text(f"- {error}")
+                            
+                            st.rerun()
+                        else:
+                            st.error("❌ 配置导入失败！")
+                            if stats.get('errors'):
+                                st.error("**错误信息：**")
+                                for error in stats['errors']:
+                                    st.text(f"- {error}")
+                else:
+                    st.error(f"❌ 不支持的文件格式: {file_extension}")
+                        
+            except UnicodeDecodeError:
+                st.error("❌ 文件编码错误，请确保文件是UTF-8编码（JSON文件）")
+            except ImportError as e:
+                st.error("❌ 导入失败: 需要安装openpyxl库")
+                st.code("pip install openpyxl", language="bash")
+            except Exception as e:
+                st.error(f"❌ 导入失败: {str(e)}")
+    
+    st.markdown("---")
+    
     # 显示默认点数说明
     st.info(f"**说明**：未配置的模型将使用默认点数 {DEFAULT_POINTS} 点")
 

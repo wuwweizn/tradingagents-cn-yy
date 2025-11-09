@@ -602,3 +602,554 @@ class ModelPointsManager:
 # 创建全局实例（兼容旧代码）
 model_points_manager = ModelPointsManager()
 
+
+# ===== 批量导出和导入功能 =====
+
+def export_all_config() -> Dict:
+    """
+    导出所有模型点数配置（包括模型配置、研究深度配置、开关配置）
+    
+    Returns:
+        包含所有配置的字典，格式：
+        {
+            'version': str,
+            'export_time': str,
+            'model_points': [...],
+            'research_depth_points': {...},
+            'points_toggle': {...},
+            'default_points': int
+        }
+    """
+    from datetime import datetime
+    
+    try:
+        # 获取所有配置
+        model_config = get_all_model_points()
+        research_depth_config = get_all_research_depth_points()
+        toggle_config = get_points_toggle_config()
+        
+        # 构建导出数据
+        export_data = {
+            'version': '2.0',  # 导出格式版本
+            'export_time': datetime.now().isoformat(),
+            'export_description': 'TradingAgents-CN 模型点数配置导出',
+            'default_points': DEFAULT_POINTS,
+            'model_points': [
+                {
+                    'provider': provider,
+                    'model': model,
+                    'points': points
+                }
+                for (provider, model), points in sorted(model_config.items())
+            ],
+            'research_depth_points': {
+                str(depth): points
+                for depth, points in sorted(research_depth_config.items())
+            },
+            'points_toggle': toggle_config.copy()
+        }
+        
+        return export_data
+    except Exception as e:
+        raise Exception(f"导出配置失败: {str(e)}")
+
+
+def export_config_to_json(file_path: str = None) -> str:
+    """
+    导出配置到JSON文件
+    
+    Args:
+        file_path: 文件路径，如果为None则返回JSON字符串
+    
+    Returns:
+        如果file_path为None，返回JSON字符串；否则返回文件路径
+    """
+    import json
+    
+    try:
+        export_data = export_all_config()
+        json_str = json.dumps(export_data, ensure_ascii=False, indent=2)
+        
+        if file_path:
+            # 保存到文件
+            path_obj = Path(file_path)
+            path_obj.parent.mkdir(parents=True, exist_ok=True)
+            with open(path_obj, 'w', encoding='utf-8') as f:
+                f.write(json_str)
+            return str(path_obj.absolute())
+        else:
+            # 返回JSON字符串
+            return json_str
+    except Exception as e:
+        raise Exception(f"导出配置到JSON失败: {str(e)}")
+
+
+def import_config_from_dict(import_data: Dict, merge_mode: bool = False) -> Tuple[bool, Dict[str, int]]:
+    """
+    从字典导入配置
+    
+    Args:
+        import_data: 导入的配置数据
+        merge_mode: True=合并模式（保留现有配置，只更新导入的配置），False=覆盖模式（完全替换）
+    
+    Returns:
+        (是否成功, 统计信息字典)
+    """
+    stats = {
+        'model_points_added': 0,
+        'model_points_updated': 0,
+        'research_depth_updated': 0,
+        'toggle_updated': False,
+        'errors': []
+    }
+    
+    try:
+        # 验证导入数据格式
+        if not isinstance(import_data, dict):
+            stats['errors'].append("导入数据格式错误：必须是字典格式")
+            return False, stats
+        
+        # 检查版本兼容性
+        version = import_data.get('version', '1.0')
+        if version not in ['1.0', '2.0']:
+            stats['errors'].append(f"不支持的配置版本: {version}")
+            return False, stats
+        
+        # 导入模型点数配置
+        if 'model_points' in import_data:
+            model_points_list = import_data['model_points']
+            if not isinstance(model_points_list, list):
+                stats['errors'].append("model_points 必须是列表格式")
+            else:
+                current_config = get_all_model_points() if merge_mode else {}
+                
+                for item in model_points_list:
+                    try:
+                        provider = str(item.get('provider', '')).lower().strip()
+                        model = str(item.get('model', '')).strip()
+                        points = int(item.get('points', DEFAULT_POINTS))
+                        
+                        if not provider or not model:
+                            stats['errors'].append(f"无效的配置项: {item}")
+                            continue
+                        
+                        key = (provider, model)
+                        if key in current_config:
+                            stats['model_points_updated'] += 1
+                        else:
+                            stats['model_points_added'] += 1
+                        
+                        current_config[key] = points
+                    except (ValueError, TypeError) as e:
+                        stats['errors'].append(f"配置项格式错误: {item} - {str(e)}")
+                        continue
+                
+                # 保存模型点数配置
+                if _save_config(current_config):
+                    reload_config()
+                else:
+                    stats['errors'].append("保存模型点数配置失败")
+        
+        # 导入研究深度点数配置
+        if 'research_depth_points' in import_data:
+            research_depth_data = import_data['research_depth_points']
+            if not isinstance(research_depth_data, dict):
+                stats['errors'].append("research_depth_points 必须是字典格式")
+            else:
+                for depth_str, points in research_depth_data.items():
+                    try:
+                        depth = int(depth_str)
+                        points_int = int(points)
+                        
+                        if depth < 1 or depth > 5:
+                            stats['errors'].append(f"研究深度必须在1-5之间: {depth}")
+                            continue
+                        
+                        if set_research_depth_points(depth, points_int):
+                            stats['research_depth_updated'] += 1
+                        else:
+                            stats['errors'].append(f"设置研究深度 {depth} 失败")
+                    except (ValueError, TypeError) as e:
+                        stats['errors'].append(f"研究深度配置格式错误: {depth_str} - {str(e)}")
+                        continue
+        
+        # 导入点数开关配置
+        if 'points_toggle' in import_data:
+            toggle_data = import_data['points_toggle']
+            if not isinstance(toggle_data, dict):
+                stats['errors'].append("points_toggle 必须是字典格式")
+            else:
+                enable_research_depth = toggle_data.get('enable_research_depth_points')
+                enable_model = toggle_data.get('enable_model_points')
+                
+                if set_points_toggle_config(
+                    enable_research_depth_points=enable_research_depth,
+                    enable_model_points=enable_model
+                ):
+                    stats['toggle_updated'] = True
+                else:
+                    stats['errors'].append("设置点数开关配置失败")
+        
+        # 检查是否有严重错误
+        has_critical_error = any('失败' in error or '格式错误' in error for error in stats['errors'])
+        
+        return not has_critical_error, stats
+        
+    except Exception as e:
+        stats['errors'].append(f"导入配置时发生异常: {str(e)}")
+        return False, stats
+
+
+def import_config_from_json(json_data: str, merge_mode: bool = False) -> Tuple[bool, Dict[str, int]]:
+    """
+    从JSON字符串导入配置
+    
+    Args:
+        json_data: JSON格式的配置数据
+        merge_mode: True=合并模式，False=覆盖模式
+    
+    Returns:
+        (是否成功, 统计信息字典)
+    """
+    import json
+    
+    try:
+        import_data = json.loads(json_data)
+        return import_config_from_dict(import_data, merge_mode)
+    except json.JSONDecodeError as e:
+        return False, {
+            'errors': [f"JSON解析失败: {str(e)}"],
+            'model_points_added': 0,
+            'model_points_updated': 0,
+            'research_depth_updated': 0,
+            'toggle_updated': False
+        }
+    except Exception as e:
+        return False, {
+            'errors': [f"导入配置失败: {str(e)}"],
+            'model_points_added': 0,
+            'model_points_updated': 0,
+            'research_depth_updated': 0,
+            'toggle_updated': False
+        }
+
+
+def import_config_from_file(file_path: str, merge_mode: bool = False) -> Tuple[bool, Dict[str, int]]:
+    """
+    从JSON文件导入配置
+    
+    Args:
+        file_path: JSON文件路径
+        merge_mode: True=合并模式，False=覆盖模式
+    
+    Returns:
+        (是否成功, 统计信息字典)
+    """
+    try:
+        path_obj = Path(file_path)
+        if not path_obj.exists():
+            return False, {
+                'errors': [f"文件不存在: {file_path}"],
+                'model_points_added': 0,
+                'model_points_updated': 0,
+                'research_depth_updated': 0,
+                'toggle_updated': False
+            }
+        
+        with open(path_obj, 'r', encoding='utf-8') as f:
+            json_data = f.read()
+        
+        return import_config_from_json(json_data, merge_mode)
+    except Exception as e:
+        return False, {
+            'errors': [f"读取文件失败: {str(e)}"],
+            'model_points_added': 0,
+            'model_points_updated': 0,
+            'research_depth_updated': 0,
+            'toggle_updated': False
+        }
+
+
+# ===== Excel格式导出和导入功能 =====
+
+def export_config_to_excel(file_path: str = None) -> str:
+    """
+    导出配置到Excel文件
+    
+    Args:
+        file_path: 文件路径，如果为None则返回字节数据
+    
+    Returns:
+        如果file_path为None，返回字节数据；否则返回文件路径
+    """
+    try:
+        import pandas as pd
+        from io import BytesIO
+        
+        # 获取所有配置
+        export_data = export_all_config()
+        
+        # 创建Excel写入器
+        if file_path:
+            excel_writer = pd.ExcelWriter(file_path, engine='openpyxl')
+        else:
+            excel_buffer = BytesIO()
+            excel_writer = pd.ExcelWriter(excel_buffer, engine='openpyxl')
+        
+        try:
+            # 1. 模型点数配置工作表
+            model_points_data = []
+            for item in export_data.get('model_points', []):
+                model_points_data.append({
+                    '提供商 (Provider)': item['provider'],
+                    '模型名称 (Model)': item['model'],
+                    '消耗点数 (Points)': item['points']
+                })
+            
+            if model_points_data:
+                df_model = pd.DataFrame(model_points_data)
+                df_model.to_excel(excel_writer, sheet_name='模型点数配置', index=False)
+            else:
+                # 创建空的工作表
+                df_model = pd.DataFrame(columns=['提供商 (Provider)', '模型名称 (Model)', '消耗点数 (Points)'])
+                df_model.to_excel(excel_writer, sheet_name='模型点数配置', index=False)
+            
+            # 2. 研究深度点数配置工作表
+            research_depth_data = []
+            for depth_str, points in sorted(export_data.get('research_depth_points', {}).items()):
+                research_depth_data.append({
+                    '研究深度级别 (Depth)': int(depth_str),
+                    '消耗点数 (Points)': points,
+                    '说明': f'{depth_str}级 - {"快速分析" if depth_str == "1" else "基础分析" if depth_str == "2" else "标准分析" if depth_str == "3" else "深度分析" if depth_str == "4" else "全面分析"}'
+                })
+            
+            if research_depth_data:
+                df_depth = pd.DataFrame(research_depth_data)
+                df_depth.to_excel(excel_writer, sheet_name='研究深度配置', index=False)
+            else:
+                df_depth = pd.DataFrame(columns=['研究深度级别 (Depth)', '消耗点数 (Points)', '说明'])
+                df_depth.to_excel(excel_writer, sheet_name='研究深度配置', index=False)
+            
+            # 3. 点数开关配置工作表
+            toggle_data = [{
+                '配置项': '启用研究深度点数消耗',
+                '当前值': export_data.get('points_toggle', {}).get('enable_research_depth_points', True),
+                '说明': '是否启用研究深度级别的点数消耗'
+            }, {
+                '配置项': '启用模型点数消耗',
+                '当前值': export_data.get('points_toggle', {}).get('enable_model_points', True),
+                '说明': '是否启用模型点数消耗'
+            }]
+            
+            df_toggle = pd.DataFrame(toggle_data)
+            df_toggle.to_excel(excel_writer, sheet_name='开关配置', index=False)
+            
+            # 4. 配置信息工作表
+            info_data = [{
+                '配置项': '导出时间',
+                '值': export_data.get('export_time', '')
+            }, {
+                '配置项': '配置版本',
+                '值': export_data.get('version', '2.0')
+            }, {
+                '配置项': '默认点数',
+                '值': export_data.get('default_points', DEFAULT_POINTS)
+            }, {
+                '配置项': '说明',
+                '值': '此文件包含TradingAgents-CN模型点数配置，可直接编辑后导入'
+            }]
+            
+            df_info = pd.DataFrame(info_data)
+            df_info.to_excel(excel_writer, sheet_name='配置信息', index=False)
+            
+            # 保存Excel文件
+            excel_writer.close()
+            
+            if file_path:
+                return str(Path(file_path).absolute())
+            else:
+                excel_buffer.seek(0)
+                return excel_buffer.getvalue()
+                
+        except Exception as e:
+            excel_writer.close()
+            raise e
+            
+    except ImportError:
+        raise Exception("需要安装openpyxl库: pip install openpyxl")
+    except Exception as e:
+        raise Exception(f"导出配置到Excel失败: {str(e)}")
+
+
+def import_config_from_excel(file_path: str, merge_mode: bool = False) -> Tuple[bool, Dict[str, int]]:
+    """
+    从Excel文件导入配置
+    
+    Args:
+        file_path: Excel文件路径
+        merge_mode: True=合并模式，False=覆盖模式
+    
+    Returns:
+        (是否成功, 统计信息字典)
+    """
+    stats = {
+        'model_points_added': 0,
+        'model_points_updated': 0,
+        'research_depth_updated': 0,
+        'toggle_updated': False,
+        'errors': []
+    }
+    
+    try:
+        import pandas as pd
+        
+        path_obj = Path(file_path)
+        if not path_obj.exists():
+            return False, {
+                'errors': [f"文件不存在: {file_path}"],
+                **{k: v for k, v in stats.items() if k != 'errors'}
+            }
+        
+        # 读取Excel文件
+        excel_file = pd.ExcelFile(file_path, engine='openpyxl')
+        
+        # 构建导入数据字典
+        import_data = {
+            'version': '2.0',
+            'model_points': [],
+            'research_depth_points': {},
+            'points_toggle': {}
+        }
+        
+        # 1. 读取模型点数配置
+        if '模型点数配置' in excel_file.sheet_names:
+            try:
+                df_model = pd.read_excel(excel_file, sheet_name='模型点数配置')
+                
+                # 处理不同的列名格式
+                provider_col = None
+                model_col = None
+                points_col = None
+                
+                for col in df_model.columns:
+                    col_lower = str(col).lower()
+                    if 'provider' in col_lower or '提供商' in col:
+                        provider_col = col
+                    elif 'model' in col_lower or '模型' in col:
+                        model_col = col
+                    elif 'points' in col_lower or '点数' in col:
+                        points_col = col
+                
+                if provider_col and model_col and points_col:
+                    for _, row in df_model.iterrows():
+                        try:
+                            provider = str(row[provider_col]).strip().lower()
+                            model = str(row[model_col]).strip()
+                            points = int(float(row[points_col]))  # 处理可能的浮点数
+                            
+                            if provider and model and not pd.isna(points):
+                                import_data['model_points'].append({
+                                    'provider': provider,
+                                    'model': model,
+                                    'points': points
+                                })
+                        except (ValueError, TypeError) as e:
+                            stats['errors'].append(f"模型配置行格式错误: {row.to_dict()} - {str(e)}")
+                else:
+                    stats['errors'].append("模型点数配置工作表缺少必要的列")
+            except Exception as e:
+                stats['errors'].append(f"读取模型点数配置失败: {str(e)}")
+        
+        # 2. 读取研究深度点数配置
+        if '研究深度配置' in excel_file.sheet_names:
+            try:
+                df_depth = pd.read_excel(excel_file, sheet_name='研究深度配置')
+                
+                depth_col = None
+                points_col = None
+                
+                for col in df_depth.columns:
+                    col_lower = str(col).lower()
+                    if 'depth' in col_lower or '深度' in col:
+                        depth_col = col
+                    elif 'points' in col_lower or '点数' in col:
+                        points_col = col
+                
+                if depth_col and points_col:
+                    for _, row in df_depth.iterrows():
+                        try:
+                            depth = int(float(row[depth_col]))
+                            points = int(float(row[points_col]))
+                            
+                            if 1 <= depth <= 5 and not pd.isna(points):
+                                import_data['research_depth_points'][str(depth)] = points
+                        except (ValueError, TypeError) as e:
+                            stats['errors'].append(f"研究深度配置行格式错误: {row.to_dict()} - {str(e)}")
+                else:
+                    stats['errors'].append("研究深度配置工作表缺少必要的列")
+            except Exception as e:
+                stats['errors'].append(f"读取研究深度配置失败: {str(e)}")
+        
+        # 3. 读取开关配置
+        if '开关配置' in excel_file.sheet_names:
+            try:
+                df_toggle = pd.read_excel(excel_file, sheet_name='开关配置')
+                
+                config_col = None
+                value_col = None
+                
+                for col in df_toggle.columns:
+                    col_lower = str(col).lower()
+                    if '配置项' in col or 'config' in col_lower:
+                        config_col = col
+                    elif '值' in col or 'value' in col_lower:
+                        value_col = col
+                
+                if config_col and value_col:
+                    for _, row in df_toggle.iterrows():
+                        try:
+                            config_item = str(row[config_col]).strip()
+                            value = row[value_col]
+                            
+                            # 处理布尔值
+                            if isinstance(value, bool):
+                                bool_value = value
+                            elif isinstance(value, str):
+                                bool_value = value.lower() in ['true', '1', 'yes', '是', '启用']
+                            else:
+                                bool_value = bool(value)
+                            
+                            if '研究深度' in config_item or 'research' in config_item.lower():
+                                import_data['points_toggle']['enable_research_depth_points'] = bool_value
+                            elif '模型' in config_item or 'model' in config_item.lower():
+                                import_data['points_toggle']['enable_model_points'] = bool_value
+                        except Exception as e:
+                            stats['errors'].append(f"开关配置行格式错误: {row.to_dict()} - {str(e)}")
+                else:
+                    stats['errors'].append("开关配置工作表缺少必要的列")
+            except Exception as e:
+                stats['errors'].append(f"读取开关配置失败: {str(e)}")
+        
+        # 使用字典导入函数
+        success, import_stats = import_config_from_dict(import_data, merge_mode)
+        
+        # 合并统计信息
+        stats['model_points_added'] = import_stats.get('model_points_added', 0)
+        stats['model_points_updated'] = import_stats.get('model_points_updated', 0)
+        stats['research_depth_updated'] = import_stats.get('research_depth_updated', 0)
+        stats['toggle_updated'] = import_stats.get('toggle_updated', False)
+        stats['errors'].extend(import_stats.get('errors', []))
+        
+        return success, stats
+        
+    except ImportError:
+        return False, {
+            'errors': ['需要安装openpyxl库: pip install openpyxl'],
+            **{k: v for k, v in stats.items() if k != 'errors'}
+        }
+    except Exception as e:
+        return False, {
+            'errors': [f"从Excel导入配置失败: {str(e)}"],
+            **{k: v for k, v in stats.items() if k != 'errors'}
+        }
+
