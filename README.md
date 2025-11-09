@@ -1,4 +1,4 @@
-# TradingAgents-cn 中文增强版二次开发带批量分析-会员管理运营版
+# TradingAgents-cn 中文卡密运营版
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
@@ -7,17 +7,17 @@
 [![Original](https://img.shields.io/badge/基于-TauricResearch/TradingAgents-orange.svg)](https://github.com/TauricResearch/TradingAgents)
 
 > 🚀 **最新版本 cn-0.1.15**: 开发者体验与LLM生态系统大升级！新增千帆大模型支持、完整开发工具链、学术研究资料、企业级工作流规范！
->
-> 🎯 **二开版核心功能**: 除原版功能外增加批量分析股票功能，大大节约时间和精力，增加会员管理功能。
->
-> 🚀 **三开版核心功能**: 除原版功能和plus版的功能外，大大节约时间和精力，增强会员管理功能、密码修改、批量导出会员、批量导入新增会员、模型点数管理、批量分析激活机器码自动生成、会员独立线程分析、模型使用授权、公告管理。
-## 🙏 致敬源项目
+>🚀**优化了docker构建的依赖，缩短了构建的时长
+> 🚀 **运营版核心功能**: 除原版功能功能外，大大节约时间和精力，增强会员管理功能、密码修改、批量导出会员、批量导入新增会员、模型点数管理、批量分析激活机器码自动生成、会员独立线程分析、模型使用授权、公告管理、
+批量导出和导入模型、研究深度的扣点配置、环境变量UI界面的配置（模型key、数据源key、媒体key、数据库等）。
 
+## 🙏 致敬源项目
 感谢 [Tauric Research](https://github.com/TauricResearch) 团队创造的革命性多智能体交易框架 [TradingAgents](https://github.com/TauricResearch/TradingAgents)！
 感谢hsliuping/TradingAgents-CN（https://github.com/hsliuping/TradingAgents-CN）团队完善中文版本，增强版本性能
 感谢oficcejo/tradingagents-cn-plus（https://github.com/oficcejo/tradingagents-cn-plus）运营版本
+
 ## 🆕版本 v0.1.15 yy版增加内容
-### 🚀 admin后台增加密码修改功能、增强会员管理功能，可授权模型的使用，会员独立线程分析、批量导入新增会员，批量导出会员信息，模型点数管理、批量分析激活机器码自动生成，单股分析1次选择不同模型扣点数可设置不同，公告管理
+### 🚀 admin后台增加密码修改功能、增强会员管理功能，可授权模型的使用，会员独立线程分析、批量导入新增会员，批量导出会员信息，模型点数管理、批量分析激活机器码自动生成，单股分析1次选择不同模型扣点数可设置不同，公告管理、批量导出和导入模型、研究深度的扣点配置、环境变量UI界面的配置
 ### 🤖 除原版功能外，增加批量分析股票板块，可批量依次分析多个股票，大大节约精力和时间
 ### 📚 初次使用批量分析机器码，直接生成
 ### 🤖 安装方法参见原版，测试系统VPS-ubuntu22版-docker构建

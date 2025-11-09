@@ -233,10 +233,10 @@ def render_login_form():
         
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            st.markdown("### 🔐 用户登录")
+            st.markdown("### 🔐 卡密登录")
             username = st.text_input(
-                "用户名", 
-                placeholder="请输入您的用户名", 
+                "卡号", 
+                placeholder="请输入您的卡号", 
                 key="username_input",
                 label_visibility="collapsed"
             )
@@ -258,7 +258,7 @@ def render_login_form():
                         time.sleep(1)
                         st.rerun()
                     else:
-                        st.error("❌ 用户名或密码错误，请重试")
+                        st.error("❌ 卡号或密码错误，请重试")
                 else:
                     st.warning("⚠️ 请输入完整的登录信息")
         
