@@ -1,7 +1,7 @@
 """
 用户认证管理器
 处理用户登录、权限验证等功能
-支持前端缓存登录状态，5分钟无操作自动失效
+支持前端缓存登录状态，30分钟无操作自动失效
 """
 
 import streamlit as st
@@ -28,7 +28,7 @@ class AuthManager:
     
     def __init__(self):
         self.users_file = Path(__file__).parent.parent / "config" / "users.json"
-        self.session_timeout = 300  # 5分钟超时
+        self.session_timeout = 1800  # 30分钟超时（更合理的会话时长）
         self._ensure_users_file()
     
     def _ensure_users_file(self):
@@ -85,7 +85,7 @@ class AuthManager:
                     
                     const data = JSON.parse(authData);
                     const now = Date.now();
-                    const timeout = 5 * 60 * 1000; // 5分钟
+                    const timeout = 30 * 60 * 1000; // 30分钟
                     
                     // 检查是否超时
                     if (now - data.lastActivity > timeout) {
@@ -260,10 +260,27 @@ class AuthManager:
                 st.session_state.login_time = login_time
                 time_elapsed = 0
             
+            # 如果用户有活动（页面重新运行），自动延长登录时间
+            # 这样可以避免用户在使用过程中被意外退出
+            # 每次页面重新运行都视为用户活动，自动延长登录时间
+            last_activity = st.session_state.get('last_activity_time', login_time)
+            activity_interval = current_time - last_activity
+            
+            # 如果距离上次活动超过2分钟，更新活动时间并延长登录时间
+            # 这样可以避免频繁更新，同时确保用户在使用时不会超时
+            if activity_interval > 120:  # 2分钟
+                logger.debug(f"🔄 [认证检查] 检测到用户活动（间隔{activity_interval:.1f}秒），延长登录时间")
+                st.session_state.login_time = current_time
+                st.session_state.last_activity_time = current_time
+                time_elapsed = 0
+            
             if time_elapsed > self.session_timeout:
                 logger.info(f"⏰ 会话超时，自动登出 (已过时间: {time_elapsed:.1f}秒)")
                 self.logout()
                 return False
+            
+            # 更新最后活动时间
+            st.session_state.last_activity_time = current_time
             
             logger.debug(f"✅ [认证检查] 用户已认证且未超时")
             return True

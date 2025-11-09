@@ -572,7 +572,7 @@ def inject_frontend_cache_check():
             }
             
             const now = Date.now();
-            const timeout = 5 * 60 * 1000; // 5分钟
+            const timeout = 30 * 60 * 1000; // 30分钟
             const timeSinceLastActivity = now - data.lastActivity;
             
             console.log('⏰ 时间检查:', {
@@ -647,9 +647,15 @@ def main():
             st.session_state.get('login_time')):
             logger.info("🔄 从session state恢复认证状态")
             try:
-                auth_manager.login_user(
+                login_time = st.session_state.get('login_time', time.time())
+                # 如果login_time无效，使用当前时间
+                if not login_time or login_time <= 0:
+                    login_time = time.time()
+                    st.session_state.login_time = login_time
+                
+                auth_manager.restore_from_cache(
                     st.session_state.user_info, 
-                    st.session_state.login_time
+                    login_time
                 )
                 logger.info(f"✅ 成功从session state恢复用户 {st.session_state.user_info.get('username', 'Unknown')} 的认证状态")
             except Exception as e:
