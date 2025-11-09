@@ -39,10 +39,12 @@ def render_config_management():
     st.sidebar.title("配置选项")
     page = st.sidebar.selectbox(
         "选择功能",
-        ["模型配置", "定价设置", "模型点数设置", "研究深度点数设置", "使用统计", "系统设置"]
+        ["环境变量配置", "模型配置", "定价设置", "模型点数设置", "研究深度点数设置", "使用统计", "系统设置"]
     )
     
-    if page == "模型配置":
+    if page == "环境变量配置":
+        render_env_config()
+    elif page == "模型配置":
         render_model_config()
     elif page == "定价设置":
         render_pricing_config()
@@ -1094,6 +1096,244 @@ def render_env_status():
     """)
 
     st.divider()
+
+
+def render_env_config():
+    """渲染环境变量配置页面"""
+    st.markdown("**🔧 环境变量配置**")
+    st.markdown("管理.env文件中的环境变量配置")
+    
+    try:
+        from utils.env_config_manager import get_env_config_manager
+        
+        env_manager = get_env_config_manager()
+        
+        # 检查.env文件是否存在
+        if not env_manager.env_file_exists():
+            st.warning("⚠️ .env文件不存在，将自动创建")
+            # 创建空文件
+            env_manager.env_file_path.touch()
+            st.info("✅ .env文件已创建")
+            st.rerun()
+        
+        # 显示文件路径
+        st.info(f"📁 配置文件路径: `{env_manager.env_file_path}`")
+        
+        # 备份功能
+        col_backup, col_reload = st.columns(2)
+        with col_backup:
+            if st.button("💾 备份.env文件", help="创建.env文件的备份", key="backup_env_file"):
+                backup_path = env_manager.backup_env_file()
+                if backup_path:
+                    st.success(f"✅ 备份已创建: `{backup_path}`")
+                else:
+                    st.error("❌ 备份失败")
+        
+        with col_reload:
+            if st.button("🔄 重新加载", help="重新加载.env文件", key="reload_env_file"):
+                st.rerun()
+        
+        st.markdown("---")
+        
+        # 获取分类的环境变量
+        categories = env_manager.get_env_variable_categories()
+        
+        # 使用标签页显示不同分类
+        category_names = list(categories.keys())
+        if category_names:
+            tabs = st.tabs(category_names)
+            
+            for tab_idx, (category_name, tab) in enumerate(zip(category_names, tabs)):
+                with tab:
+                    st.markdown(f"**{category_name}**")
+                    
+                    variables = categories[category_name]
+                    
+                    if not variables:
+                        st.info("该分类下暂无配置项")
+                        continue
+                    
+                    # 按变量分组显示
+                    for var_info in variables:
+                        with st.expander(f"🔧 {var_info['name']}", expanded=False):
+                            key = var_info['key']
+                            current_value = var_info.get('value', '')
+                            is_sensitive = var_info.get('sensitive', False)
+                            description = var_info.get('description', '')
+                            default_value = var_info.get('default', '')
+                            
+                            # 显示说明
+                            if description:
+                                st.caption(f"💡 {description}")
+                            
+                            # 显示当前状态
+                            if var_info.get('is_set', False):
+                                st.success("✅ 已配置")
+                            else:
+                                st.warning("⚠️ 未配置")
+                                if default_value:
+                                    st.info(f"默认值: {default_value}")
+                            
+                            # 编辑表单
+                            col1, col2 = st.columns([3, 1])
+                            
+                            with col1:
+                                if is_sensitive:
+                                    # 敏感信息使用密码输入框
+                                    new_value = st.text_input(
+                                        "值",
+                                        value=current_value if current_value else "",
+                                        type="password",
+                                        key=f"env_input_{key}",
+                                        help="输入新的值（敏感信息，输入时会被隐藏）"
+                                    )
+                                else:
+                                    # 非敏感信息使用普通输入框
+                                    placeholder = default_value if default_value else "请输入值"
+                                    new_value = st.text_input(
+                                        "值",
+                                        value=current_value if current_value else "",
+                                        key=f"env_input_{key}",
+                                        placeholder=placeholder,
+                                        help=description
+                                    )
+                            
+                            with col2:
+                                # 显示当前值（如果是敏感信息，只显示部分）
+                                if is_sensitive and current_value:
+                                    display_value = "***" + current_value[-4:] if len(current_value) > 4 else "***"
+                                    st.text(f"当前: {display_value}")
+                                elif current_value:
+                                    st.text(f"当前: {current_value}")
+                                else:
+                                    st.text("当前: 未设置")
+                            
+                            # 操作按钮
+                            col_save, col_delete, col_reset = st.columns(3)
+                            
+                            with col_save:
+                                if st.button("💾 保存", key=f"save_{key}", type="primary"):
+                                    # 验证值
+                                    is_valid, error_msg = env_manager.validate_env_variable(key, new_value)
+                                    
+                                    if not is_valid:
+                                        st.error(f"❌ 验证失败: {error_msg}")
+                                    else:
+                                        # 保存变量
+                                        if env_manager.set_env_variable(key, new_value):
+                                            st.success(f"✅ {var_info['name']} 已保存")
+                                            st.info("💡 修改.env文件后，需要重启应用才能生效")
+                                            st.rerun()
+                                        else:
+                                            st.error("❌ 保存失败")
+                            
+                            with col_delete:
+                                if st.button("🗑️ 删除", key=f"delete_{key}"):
+                                    if env_manager.delete_env_variable(key):
+                                        st.success(f"✅ {var_info['name']} 已删除")
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ 删除失败")
+                            
+                            with col_reset:
+                                if default_value and st.button("🔄 重置", key=f"reset_{key}"):
+                                    if env_manager.set_env_variable(key, default_value):
+                                        st.success(f"✅ {var_info['name']} 已重置为默认值")
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ 重置失败")
+        
+        st.markdown("---")
+        
+        # 批量操作
+        st.markdown("**批量操作**")
+        
+        col_export, col_import = st.columns(2)
+        
+        with col_export:
+            st.markdown("**导出配置**")
+            if st.button("📥 导出.env文件", key="export_env_file"):
+                try:
+                    env_vars = env_manager.load_env_variables()
+                    env_content = "\n".join([f"{k}={v}" for k, v in env_vars.items() if v])
+                    
+                    st.download_button(
+                        label="💾 下载.env文件",
+                        data=env_content,
+                        file_name=".env",
+                        mime="text/plain",
+                        key="download_env_file"
+                    )
+                    st.success("✅ 配置已准备下载")
+                except Exception as e:
+                    st.error(f"❌ 导出失败: {str(e)}")
+        
+        with col_import:
+            st.markdown("**导入配置**")
+            uploaded_file = st.file_uploader(
+                "选择.env文件",
+                type=['env', 'txt'],
+                key="upload_env_file"
+            )
+            
+            if uploaded_file is not None:
+                try:
+                    content = uploaded_file.read().decode('utf-8')
+                    
+                    # 解析.env文件内容
+                    env_vars = {}
+                    for line in content.split('\n'):
+                        line = line.strip()
+                        if line and not line.startswith('#'):
+                            if '=' in line:
+                                key, value = line.split('=', 1)
+                                key = key.strip()
+                                value = value.strip().strip('"').strip("'")
+                                if key:
+                                    env_vars[key] = value
+                    
+                    if env_vars:
+                        st.info(f"📋 检测到 {len(env_vars)} 个环境变量")
+                        
+                        if st.button("📤 导入配置", key="import_env_file", type="primary"):
+                            # 备份现有配置
+                            backup_path = env_manager.backup_env_file()
+                            if backup_path:
+                                st.info(f"✅ 已备份现有配置到: {backup_path.name}")
+                            
+                            # 导入新配置
+                            if env_manager.save_env_variables(env_vars):
+                                st.success("✅ 配置导入成功！")
+                                st.warning("⚠️ 需要重启应用才能生效")
+                                st.rerun()
+                            else:
+                                st.error("❌ 导入失败")
+                except Exception as e:
+                    st.error(f"❌ 导入失败: {str(e)}")
+        
+        st.markdown("---")
+        
+        # 重要提示
+        st.warning("""
+        ⚠️ **重要提示：**
+        - 修改.env文件后，需要**重启应用**才能生效
+        - 敏感信息（API密钥等）请妥善保管，不要泄露
+        - 建议在修改前先备份.env文件
+        - 删除变量会将其设置为空值，不会从文件中移除
+        """)
+        
+    except ImportError as e:
+        st.error(f"❌ 无法导入环境变量管理模块: {e}")
+        st.info("💡 请检查模块是否正确安装")
+    except Exception as e:
+        st.error(f"❌ 加载环境变量配置失败: {str(e)}")
+        # 记录错误（如果logger可用）
+        try:
+            from tradingagents.utils.logging_manager import get_logger
+            logger = get_logger('web')
+            logger.error(f"环境变量配置页面错误: {e}", exc_info=True)
+        except:
+            pass
 
 
 def main():
