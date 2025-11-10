@@ -381,7 +381,7 @@ def create_news_analyst(llm, toolkit):
                         report = result.content
                 else:
                     # 非 DashScope 或没有检测到假调用问题，直接使用结果
-                    report = result.content
+                report = result.content
         
         total_time_taken = (datetime.now() - start_time).total_seconds()
         logger.info(f"[新闻分析师] 新闻分析完成，总耗时: {total_time_taken:.2f}秒")
