@@ -205,21 +205,76 @@ def _delete_user_form(users: dict) -> None:
 	if not usernames:
 		st.info("暂无用户可删除")
 		return
-	selected = st.selectbox("选择要删除的用户", usernames)
-	if not selected:
+
+	# 单个删除选项（保留原有功能，适合快速删除）
+	with st.expander("单个删除", expanded=False):
+		selected_single = st.selectbox("选择要删除的用户", usernames, key="single_delete_select")
+		if selected_single:
+			if selected_single == "admin":
+				st.warning("禁止删除内置管理员账户")
+			else:
+				_ensure_admin_self_protection(selected_single)
+				if st.button("确认删除该用户", type="secondary", key="single_delete_button"):
+					users.pop(selected_single, None)
+					if _save_users(users):
+						st.success(f"已删除用户：{selected_single}")
+						try:
+							st.rerun()
+						except Exception:
+							st.experimental_rerun()
+
+	# 批量删除选项
+	st.markdown("### 批量删除")
+	st.info("可以一次选择多个会员进行批量删除。系统会自动跳过内置管理员账户。")
+
+	# 构建可选择的用户列表（排除内置管理员）
+	selectable_users = [u for u in usernames if u != "admin"]
+	if not selectable_users:
+		st.info("除了内置管理员外，没有其他可删除的用户。")
 		return
-	if selected == "admin":
-		st.warning("禁止删除内置管理员账户")
+
+	selected_users = st.multiselect(
+		"选择要批量删除的会员",
+		options=selectable_users,
+		help="按住 Ctrl / ⌘ 键可以多选"
+	)
+
+	if not selected_users:
+		st.info("请选择至少一个会员进行删除。")
 		return
-	_ensure_admin_self_protection(selected)
-	if st.button("确认删除", type="secondary"):
-		users.pop(selected, None)
+
+	# 检查是否包含当前登录用户
+	current_user = auth_manager.get_current_user() if auth_manager else None
+	current_username = current_user.get("username") if current_user else None
+
+	if current_username and current_username in selected_users:
+		st.error("⚠️ 不能删除当前登录的管理员账户，请先取消选择当前账号。")
+		return
+
+	st.warning(f"⚠️ 将删除 {len(selected_users)} 个会员：{', '.join(selected_users)}")
+	confirm_delete = st.checkbox("我已确认删除所选会员", key="confirm_bulk_delete")
+
+	delete_button_disabled = not confirm_delete or len(selected_users) == 0
+
+	if st.button("批量删除所选会员", type="secondary", disabled=delete_button_disabled):
+		deleted_users = []
+		for username in selected_users:
+			if username in users:
+				users.pop(username)
+				deleted_users.append(username)
+
+		if not deleted_users:
+			st.warning("没有删除任何用户。")
+			return
+
 		if _save_users(users):
-			st.success("已删除")
+			st.success(f"✅ 已批量删除 {len(deleted_users)} 个会员：{', '.join(deleted_users)}")
 			try:
 				st.rerun()
 			except Exception:
 				st.experimental_rerun()
+		else:
+			st.error("❌ 删除失败，请检查文件权限或磁盘空间。")
 
 
 def _export_users(users: dict) -> None:
@@ -255,15 +310,16 @@ def _export_users(users: dict) -> None:
 	timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 	
 	if export_format == "Excel (.xlsx)":
-		if excel_export_type == "批量导入模板（含密码列）":
-			# 生成批量导入模板（只包含列名，不包含现有数据）
-			rows = [{
-				"用户名": "",
-				"密码": "",
-				"角色": "user",
-				"权限": "analysis",
-				"点数": 0
-			}]
+        if excel_export_type == "批量导入模板（含密码列）":
+            # 生成批量导入模板（只包含列名，不包含现有数据）
+            rows = [{
+                "用户名": "",
+                "密码": "",
+                "角色": "user",
+                "权限": "analysis",
+                "LLM提供商权限": "dashscope, openai",
+                "点数": 0
+            }]
 			
 			# 创建DataFrame
 			df = pd.DataFrame(rows)
@@ -275,14 +331,15 @@ def _export_users(users: dict) -> None:
 				df.to_excel(writer, sheet_name='会员信息', index=False)
 				
 				# 写入说明信息
-				instructions = [
-					["列名", "说明", "示例", "必填"],
-					["用户名", "会员登录卡号/用户名", "user001", "是"],
-					["密码", "登录密码（明文）", "password123", "是"],
-					["角色", "用户角色：user 或 admin", "user", "是"],
-					["权限", "权限列表，用逗号分隔", "analysis, batch_analysis", "否"],
-					["点数", "初始点数", "10", "否"]
-				]
+                instructions = [
+                    ["列名", "说明", "示例", "必填"],
+                    ["用户名", "会员登录卡号/用户名", "user001", "是"],
+                    ["密码", "登录密码（明文）", "password123", "是"],
+                    ["角色", "用户角色：user 或 admin", "user", "是"],
+                    ["权限", "权限列表，用逗号分隔", "analysis, batch_analysis", "否"],
+                    ["LLM提供商权限", "允许使用的LLM提供商，用逗号分隔", "dashscope, openai", "否"],
+                    ["点数", "初始点数", "10", "否"]
+                ]
 				instructions_df = pd.DataFrame(instructions[1:], columns=instructions[0])
 				instructions_df.to_excel(writer, sheet_name='填写说明', index=False)
 			
@@ -299,18 +356,29 @@ def _export_users(users: dict) -> None:
 			)
 			
 			# 显示导出提示
-			st.info("**批量导入模板说明**：\n"
-			        "- **用户名**：会员的登录卡号/用户名（必填）\n"
-			        "- **密码**：登录密码，明文填写（必填，导入后可直接使用）\n"
-			        "- **角色**：user（普通用户）或 admin（管理员）\n"
-			        "- **权限**：多个权限用逗号分隔，如：analysis, batch_analysis, config\n"
-			        "- **点数**：初始点数，默认为0\n"
-			        "- 填写完成后，使用下方的导入功能上传此文件")
+            st.info("**批量导入模板说明**：\n"
+                    "- **用户名**：会员的登录卡号/用户名（必填）\n"
+                    "- **密码**：登录密码，明文填写（必填，导入后可直接使用）\n"
+                    "- **角色**：user（普通用户）或 admin（管理员）\n"
+                    "- **权限**：多个权限用逗号分隔，如：analysis, batch_analysis, config\n"
+                    "- **LLM提供商权限**：多个提供商用逗号分隔，如：dashscope, openai\n"
+                    "- **点数**：初始点数，默认为0\n"
+                    "- 填写完成后，使用下方的导入功能上传此文件")
 		
 		else:  # 数据备份（仅密码哈希）
 			# 准备Excel数据
 			rows = []
-			for username, info in users.items():
+            provider_display = {
+                "dashscope": "阿里百炼",
+                "deepseek": "DeepSeek",
+                "google": "Google",
+                "openai": "OpenAI",
+                "openrouter": "OpenRouter",
+                "siliconflow": "硅基流动",
+                "custom_openai": "自定义OpenAI",
+                "qianfan": "文心一言"
+            }
+            for username, info in users.items():
 				# 处理创建时间
 				created_at = info.get("created_at", time.time())
 				if isinstance(created_at, (int, float)):
@@ -322,11 +390,15 @@ def _export_users(users: dict) -> None:
 				permissions = info.get("permissions", [])
 				permissions_str = ", ".join(permissions) if isinstance(permissions, list) else str(permissions)
 				
-				rows.append({
+                provider_perms = info.get("provider_permissions", [])
+                provider_perms_str = ", ".join([provider_display.get(p, p) for p in provider_perms]) if provider_perms else ""
+                
+                rows.append({
 					"用户名": username,
 					"密码哈希": info.get("password_hash", ""),
 					"角色": info.get("role", "user"),
 					"权限": permissions_str,
+                    "LLM提供商权限": provider_perms_str,
 					"点数": int(info.get("points", 0)),
 					"创建时间": created_time
 				})
@@ -361,11 +433,12 @@ def _export_users(users: dict) -> None:
 			)
 			
 			# 显示导出提示
-			st.info("**数据备份说明**：\n"
-			        "- 此文件包含所有会员的完整数据\n"
-			        "- 密码哈希列：用于系统验证，请勿修改\n"
-			        "- 权限列：多个权限用逗号和空格分隔（如：analysis, batch_analysis）\n"
-			        "- 导入时需要保留所有列，否则可能导入失败")
+            st.info("**数据备份说明**：\n"
+                    "- 此文件包含所有会员的完整数据\n"
+                    "- 密码哈希列：用于系统验证，请勿修改\n"
+                    "- 权限列：多个权限用逗号和空格分隔（如：analysis, batch_analysis）\n"
+                    "- LLM提供商权限列：使用提供商标识（如：dashscope, openai），多个值用逗号分隔\n"
+                    "- 导入时需要保留所有列，否则可能导入失败")
 	
 	else:  # JSON格式
 		# 生成导出数据（包含元数据）
@@ -400,9 +473,9 @@ def _import_users(users: dict) -> None:
 	uploaded_file = st.file_uploader(
 		"选择要导入的文件",
 		type=["json", "xlsx"],
-		help="支持JSON和Excel(.xlsx)格式\n"
-		     "• 批量导入模板：包含\"密码\"列（明文），填写用户名和密码即可批量导入\n"
-		     "• 数据备份文件：包含\"密码哈希\"列，用于系统数据备份和恢复"
+        help="支持JSON和Excel(.xlsx)格式\n"
+             "• 批量导入模板：包含\"密码\"列（明文）和\"LLM提供商权限\"列，填写后可批量导入\n"
+             "• 数据备份文件：包含\"密码哈希\"列和\"LLM提供商权限\"列，用于系统数据备份和恢复"
 	)
 	
 	if uploaded_file is not None:
@@ -600,10 +673,13 @@ def _import_users(users: dict) -> None:
 			
 			preview_rows = []
 			for username, info in import_users.items():
+            provider_perms = info.get("provider_permissions", [])
+            provider_str = ", ".join(provider_perms) if provider_perms else "未授权"
 				preview_rows.append({
 					"用户名": username,
 					"角色": info.get("role", "user"),
 					"权限": ", ".join(info.get("permissions", [])),
+                "LLM提供商权限": provider_str,
 					"点数": int(info.get("points", 0))
 				})
 			
