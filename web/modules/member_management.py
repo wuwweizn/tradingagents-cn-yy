@@ -262,6 +262,7 @@ def _export_users(users: dict) -> None:
 				"密码": "",
 				"角色": "user",
 				"权限": "analysis",
+				"LLM提供商权限": "dashscope, deepseek",
 				"点数": 0
 			}]
 			
@@ -281,10 +282,26 @@ def _export_users(users: dict) -> None:
 					["密码", "登录密码（明文）", "password123", "是"],
 					["角色", "用户角色：user 或 admin", "user", "是"],
 					["权限", "权限列表，用逗号分隔", "analysis, batch_analysis", "否"],
+					["LLM提供商权限", "允许使用的LLM提供商，用逗号分隔", "dashscope, deepseek, openai", "否"],
 					["点数", "初始点数", "10", "否"]
 				]
 				instructions_df = pd.DataFrame(instructions[1:], columns=instructions[0])
 				instructions_df.to_excel(writer, sheet_name='填写说明', index=False)
+				
+				# 写入提供商说明
+				provider_info = [
+					["提供商代码", "提供商名称", "说明"],
+					["dashscope", "阿里百炼", "阿里巴巴的AI服务"],
+					["deepseek", "DeepSeek V3", "DeepSeek AI模型"],
+					["google", "Google AI", "Google的AI服务"],
+					["openai", "OpenAI", "OpenAI的GPT模型"],
+					["openrouter", "OpenRouter", "OpenRouter聚合服务"],
+					["siliconflow", "硅基流动", "硅基流动AI服务"],
+					["custom_openai", "自定义OpenAI端点", "自定义OpenAI兼容端点"],
+					["qianfan", "文心一言（千帆）", "百度的文心一言"]
+				]
+				provider_df = pd.DataFrame(provider_info[1:], columns=provider_info[0])
+				provider_df.to_excel(writer, sheet_name='LLM提供商说明', index=False)
 			
 			excel_data = output.getvalue()
 			filename = f"members_template_{timestamp}.xlsx"
@@ -304,8 +321,10 @@ def _export_users(users: dict) -> None:
 			        "- **密码**：登录密码，明文填写（必填，导入后可直接使用）\n"
 			        "- **角色**：user（普通用户）或 admin（管理员）\n"
 			        "- **权限**：多个权限用逗号分隔，如：analysis, batch_analysis, config\n"
+			        "- **LLM提供商权限**：允许使用的LLM提供商，用逗号分隔，如：dashscope, deepseek, openai（可选，留空表示未授权）\n"
 			        "- **点数**：初始点数，默认为0\n"
-			        "- 填写完成后，使用下方的导入功能上传此文件")
+			        "- 填写完成后，使用下方的导入功能上传此文件\n"
+			        "- 详细提供商代码请查看Excel中的「LLM提供商说明」工作表")
 		
 		else:  # 数据备份（仅密码哈希）
 			# 准备Excel数据
@@ -322,11 +341,16 @@ def _export_users(users: dict) -> None:
 				permissions = info.get("permissions", [])
 				permissions_str = ", ".join(permissions) if isinstance(permissions, list) else str(permissions)
 				
+				# 处理LLM提供商权限列表，转换为逗号分隔的字符串
+				provider_permissions = info.get("provider_permissions", [])
+				provider_permissions_str = ", ".join(provider_permissions) if isinstance(provider_permissions, list) else str(provider_permissions)
+				
 				rows.append({
 					"用户名": username,
 					"密码哈希": info.get("password_hash", ""),
 					"角色": info.get("role", "user"),
 					"权限": permissions_str,
+					"LLM提供商权限": provider_permissions_str,
 					"点数": int(info.get("points", 0)),
 					"创建时间": created_time
 				})
@@ -365,6 +389,7 @@ def _export_users(users: dict) -> None:
 			        "- 此文件包含所有会员的完整数据\n"
 			        "- 密码哈希列：用于系统验证，请勿修改\n"
 			        "- 权限列：多个权限用逗号和空格分隔（如：analysis, batch_analysis）\n"
+			        "- LLM提供商权限列：多个提供商用逗号和空格分隔（如：dashscope, deepseek, openai）\n"
 			        "- 导入时需要保留所有列，否则可能导入失败")
 	
 	else:  # JSON格式
@@ -532,10 +557,28 @@ def _import_users(users: dict) -> None:
 					else:
 						created_at = time.time()
 					
-					# 处理提供商权限（如果Excel中有此列）
-					provider_perms_str = str(row.get("提供商权限", ""))
+					# 处理提供商权限（支持多种列名）
+					provider_perms_str = ""
+					for col_name in ["LLM提供商权限", "提供商权限", "provider_permissions"]:
+						if col_name in row:
+							provider_perms_str = str(row.get(col_name, ""))
+							break
+					
+					# 验证和清理提供商权限
+					valid_providers = {
+						"dashscope", "deepseek", "google", "openai", 
+						"openrouter", "siliconflow", "custom_openai", "qianfan"
+					}
+					
 					if provider_perms_str and provider_perms_str.lower() not in ['nan', 'none', '']:
-						provider_permissions = [p.strip() for p in provider_perms_str.replace(';', ',').split(',') if p.strip()]
+						# 分割并清理提供商权限
+						raw_providers = [p.strip() for p in provider_perms_str.replace(';', ',').split(',') if p.strip()]
+						# 验证提供商名称是否有效
+						provider_permissions = [p for p in raw_providers if p in valid_providers]
+						# 记录无效的提供商名称
+						invalid_providers = [p for p in raw_providers if p not in valid_providers]
+						if invalid_providers:
+							skip_reasons.append(f"{username}: 无效的LLM提供商名称 {', '.join(invalid_providers)}（已忽略）")
 					else:
 						provider_permissions = []  # 默认无权限，需要管理员授权
 					
@@ -599,11 +642,31 @@ def _import_users(users: dict) -> None:
 			st.markdown("#### 导入预览")
 			
 			preview_rows = []
+			provider_display = {
+				"dashscope": "阿里百炼",
+				"deepseek": "DeepSeek",
+				"google": "Google",
+				"openai": "OpenAI",
+				"openrouter": "OpenRouter",
+				"siliconflow": "硅基流动",
+				"custom_openai": "自定义OpenAI",
+				"qianfan": "文心一言"
+			}
 			for username, info in import_users.items():
+				# 格式化提供商权限显示
+				provider_perms = info.get("provider_permissions", [])
+				if not provider_perms:
+					provider_perms_str = "未授权"
+				else:
+					provider_perms_str = ", ".join([provider_display.get(p, p) for p in provider_perms[:3]])
+					if len(provider_perms) > 3:
+						provider_perms_str += f"等{len(provider_perms)}个"
+				
 				preview_rows.append({
 					"用户名": username,
 					"角色": info.get("role", "user"),
 					"权限": ", ".join(info.get("permissions", [])),
+					"LLM提供商": provider_perms_str,
 					"点数": int(info.get("points", 0))
 				})
 			
@@ -674,6 +737,28 @@ def _import_users(users: dict) -> None:
 						user_info["permissions"] = []
 					if "provider_permissions" not in user_info:
 						user_info["provider_permissions"] = []  # 默认无提供商权限
+					else:
+						# 验证提供商权限的有效性（JSON导入时也需要验证）
+						valid_providers = {
+							"dashscope", "deepseek", "google", "openai", 
+							"openrouter", "siliconflow", "custom_openai", "qianfan"
+						}
+						provider_perms = user_info.get("provider_permissions", [])
+						if isinstance(provider_perms, list):
+							# 过滤掉无效的提供商
+							valid_provider_perms = [p for p in provider_perms if p in valid_providers]
+							invalid_provider_perms = [p for p in provider_perms if p not in valid_providers]
+							if invalid_provider_perms:
+								invalid_users.append(f"{username}: 无效的LLM提供商名称 {', '.join(invalid_provider_perms)}（已忽略）")
+							user_info["provider_permissions"] = valid_provider_perms
+						elif isinstance(provider_perms, str):
+							# 如果是字符串，转换为列表
+							raw_providers = [p.strip() for p in provider_perms.replace(';', ',').split(',') if p.strip()]
+							valid_provider_perms = [p for p in raw_providers if p in valid_providers]
+							invalid_provider_perms = [p for p in raw_providers if p not in valid_providers]
+							if invalid_provider_perms:
+								invalid_users.append(f"{username}: 无效的LLM提供商名称 {', '.join(invalid_provider_perms)}（已忽略）")
+							user_info["provider_permissions"] = valid_provider_perms
 					if "points" not in user_info:
 						user_info["points"] = 0
 					if "created_at" not in user_info:
